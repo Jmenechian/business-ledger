@@ -119,3 +119,11 @@ def update_balance(connection: sqlite3.Connection, movement_id: int, balance: in
     connection.execute(
         "UPDATE movements SET balance=?, revision=revision+1 WHERE id=?", (balance, movement_id)
     )
+
+
+def mark_deleted(connection: sqlite3.Connection, movement_id: int) -> None:
+    connection.execute(
+        """UPDATE movements SET deleted_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+        modified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision=revision+1 WHERE id=?""",
+        (movement_id,),
+    )

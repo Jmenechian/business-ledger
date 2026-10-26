@@ -75,3 +75,11 @@ def edit_payment(
     return movement_controller.edit(
         database, client_id, movement_id, revision, rules.payment(input)
     )
+
+
+@router.delete("/movements/{movement_id}", status_code=204)
+def delete_movement(
+    client_id: ClientID, movement_id: MovementID, revision: Revision, database: DatabaseDependency
+):
+    movement_controller.delete(database, client_id, movement_id, revision)
+    return Response(status_code=204)

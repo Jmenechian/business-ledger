@@ -63,6 +63,14 @@ def validate_correction(old: Movement, revision: int) -> None:
         raise LedgerError("el movimiento cambió; actualice el historial antes de corregirlo", 409)
 
 
+def delete(database: Database, client_id: int, movement_id: int, revision: int) -> None:
+    with database.transaction() as connection:
+        old = movements.get(connection, client_id, movement_id)
+        validate_correction(old, revision)
+        movements.mark_deleted(connection, movement_id)
+        recalculate(connection, client_id, movement_id)
+
+
 def recalculate(connection, client_id: int, movement_id: int) -> None:
     previous = movements.balance_before(connection, client_id, movement_id)
     for movement in movements.affected(connection, client_id, movement_id):
