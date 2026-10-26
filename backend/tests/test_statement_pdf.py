@@ -63,18 +63,25 @@ def test_statement_pdf_has_spanish_columns_preserved_context_and_escaped_text():
         "Debe",
         "Haber",
         "Saldo",
-        "Movimientos 2 a 7",
-        "$ 44.300",
-        "#2",
         "SALDO FINAL: $ 104.000",
         "$ -7,5",
         "Texto <b>literal</b> & ñandú",
         "13-Oct-2026",
         "Fecha de emisión: 25-Oct-2026",
-        "Precio calculado",
     ]:
         assert expected in text
-    assert "#800" not in text  # Internal movement IDs never serve as row numbering.
+    for annotation in [
+        "#2",
+        "#800",
+        "Movimientos",
+        "Saldo anterior",
+        "Precio calculado",
+        "El historial se conserva",
+        "Página",
+        "*",
+    ]:
+        assert annotation not in text
+    assert text.strip().endswith("SALDO FINAL: $ 104.000")
 
 
 def test_long_statement_and_oversize_description_split_across_pages_without_truncation():
@@ -96,8 +103,8 @@ def test_long_statement_and_oversize_description_split_across_pages_without_trun
     assert "FIN DEL DETALLE" in full_text
     assert "Producto sintético 84" in full_text
     assert "SALDO FINAL: $ 104.000" in pages[-1]
-    for page_number, text in enumerate(pages, 1):
-        assert f"Página {page_number}" in text
+    for text in pages:
+        assert "Página" not in text
         # Each page containing table content repeats all eight column headers.
         if "Producto sintético" in text or "DESCRIPCIÓN" in text:
             assert "Cant" in text and "Haber" in text and "Saldo" in text
@@ -121,4 +128,4 @@ def test_unsupported_unicode_is_represented_explicitly_instead_of_missing_glyphs
     )
     assert "[U+4E2D]" in text
     assert "[U+1F600]" in text
-    assert "código Unicode" in text
+    assert "código Unicode" not in text

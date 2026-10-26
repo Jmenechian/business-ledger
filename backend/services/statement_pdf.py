@@ -146,14 +146,7 @@ def render_statement(report: Statement) -> bytes:
             size=9,
             color=colors.HexColor("#555555"),
         ),
-        Spacer(1, 5),
-        paragraph(
-            f"Movimientos {report.first_row_number} a {report.last_row_number}"
-            f"  |  Saldo anterior: {amount(report.opening_balance)}",
-            size=7,
-            color=colors.HexColor("#555555"),
-        ),
-        Spacer(1, 5),
+        Spacer(1, 10),
     ]
     headers = ("Cant", "Detalle", "P. Unit", "N° Rem", "Fecha", "Debe", "Haber", "Saldo")
     data = [
@@ -164,8 +157,6 @@ def render_statement(report: Statement) -> bytes:
     ]
     for row in report.rows:
         price = "-" if row.precio_unitario is None else amount(row.precio_unitario)
-        if row.price_is_derived:
-            price += " *"
         values = [
             "-" if row.cant is None else number(row.cant),
             row.detalle,
@@ -182,13 +173,6 @@ def render_statement(report: Statement) -> bytes:
             align = TA_LEFT if column == 1 else TA_CENTER if column in (0, 3, 4) else TA_RIGHT
             color = BLUE if payment and column != 7 else colors.HexColor("#111111")
             cell = paragraph(text, align=align, color=color)
-            if column == 1:
-                # Visible customer row numbering without adding an accounting column.
-                cell = Paragraph(
-                    f'<font size="6" color="#666666">#{row.number}</font>  '
-                    + escape(display_text(text, "Helvetica")[0]).replace("\n", "<br/>"),
-                    cell.style,
-                )
             cells.append(cell)
         data.append(cells)
     table = Table(
@@ -225,40 +209,6 @@ def render_statement(report: Statement) -> bytes:
             size=11,
         ),
     ]
-    if any(row.price_is_derived for row in report.rows):
-        ending.extend(
-            [
-                Spacer(1, 7),
-                paragraph(
-                    "* Precio calculado desde Debe / Cant, redondeado a entero. "
-                    "El historial se conserva.",
-                    size=7,
-                    color=colors.HexColor("#555555"),
-                ),
-            ]
-        )
-    source_texts = [report.client_name] + [
-        text for row in report.rows for text in (row.detalle, row.n_remito or "", row.fecha or "")
-    ]
-    if any(display_text(text, "Helvetica")[0] != text for text in source_texts):
-        ending.extend(
-            [
-                Spacer(1, 7),
-                paragraph(
-                    "Caracteres fuera de la fuente se indican por su código Unicode [U+...].",
-                    size=7,
-                    color=colors.HexColor("#555555"),
-                ),
-            ]
-        )
     story.append(KeepTogether(ending))
-
-    def page_footer(canvas, doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.HexColor("#666666"))
-        canvas.drawRightString(A4[0] - 28.35, 18, f"Página {doc.page}")
-        canvas.restoreState()
-
-    document.build(story, onFirstPage=page_footer, onLaterPages=page_footer)
+    document.build(story)
     return output.getvalue()
