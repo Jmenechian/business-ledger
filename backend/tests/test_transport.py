@@ -1,13 +1,20 @@
+import http.client
 import ipaddress
+import json
+import socket
 import ssl
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import uvicorn
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+from backend.main import create_app
 from backend.services.transport import Transport
 
 
@@ -15,12 +22,32 @@ from backend.services.transport import Transport
 def tls_files(tmp_path):
     def create(expired=False):
         key = ec.generate_private_key(ec.SECP256R1())
+        ca_key = ec.generate_private_key(ec.SECP256R1())
+        ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Synthetic test CA")])
         name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Synthetic TLS test")])
         now = datetime.now(timezone.utc)
+        authority = (
+            x509.CertificateBuilder()
+            .subject_name(ca_name)
+            .issuer_name(ca_name)
+            .public_key(ca_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - timedelta(days=2))
+            .not_valid_after(now + timedelta(days=2))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+            .add_extension(
+                x509.KeyUsage(False, False, False, False, False, True, True, False, False),
+                critical=True,
+            )
+            .add_extension(
+                x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False
+            )
+            .sign(ca_key, hashes.SHA256())
+        )
         certificate = (
             x509.CertificateBuilder()
             .subject_name(name)
-            .issuer_name(name)
+            .issuer_name(ca_name)
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(now - timedelta(days=1))
@@ -35,11 +62,26 @@ def tls_files(tmp_path):
                 critical=False,
             )
             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-            .sign(key, hashes.SHA256())
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .add_extension(
+                x509.KeyUsage(True, False, False, False, False, False, False, False, False),
+                critical=True,
+            )
+            .add_extension(
+                x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False
+            )
+            .add_extension(
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+                critical=False,
+            )
+            .sign(ca_key, hashes.SHA256())
         )
         cert_path = tmp_path / ("expired.pem" if expired else "synthetic.pem")
         key_path = tmp_path / ("expired.key" if expired else "synthetic.key")
-        cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+        cert_path.write_bytes(
+            certificate.public_bytes(serialization.Encoding.PEM)
+            + authority.public_bytes(serialization.Encoding.PEM)
+        )
         key_path.write_bytes(
             key.private_bytes(
                 serialization.Encoding.PEM,
@@ -102,3 +144,66 @@ def test_https_boundary_rejects_plaintext_foreign_hosts_and_origins(client):
         ).status_code
         == 426
     )
+
+
+def test_real_https_login_write_and_logout(tls_files, tmp_path, credential, synthetic_password):
+    certificate, key = tls_files()
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+    origin = f"https://localhost:{port}"
+    context = Transport("127.0.0.1", port, origin, certificate, key).ssl_context()
+    app = create_app(tmp_path / "synthetic-tls.db", origin=origin, credential=credential)
+    config = uvicorn.Config(
+        app,
+        ssl_context_factory=lambda config, factory: context,
+        proxy_headers=False,
+        access_log=False,
+        log_level="critical",
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+    thread.start()
+    connection = None
+    try:
+        deadline = time.monotonic() + 5
+        while not server.started and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert server.started
+        trusted = ssl.create_default_context(cafile=str(certificate))
+        connection = http.client.HTTPSConnection("127.0.0.1", port, context=trusted, timeout=5)
+
+        def request(method, path, payload=None, cookie=""):
+            headers = {"Host": f"localhost:{port}", "Origin": origin}
+            if cookie:
+                headers["Cookie"] = cookie
+            if payload is not None:
+                headers["Content-Type"] = "application/json"
+            connection.request(
+                method,
+                path,
+                body=json.dumps(payload) if payload is not None else None,
+                headers=headers,
+            )
+            response = connection.getresponse()
+            response.read()
+            return response
+
+        assert request("GET", "/api/health").status == 200
+        assert request("GET", "/api/clients").status == 401
+        logged_in = request("POST", "/api/auth/login", {"password": synthetic_password})
+        assert logged_in.status == 200
+        cookie = logged_in.getheader("Set-Cookie").split(";", 1)[0]
+        assert (
+            request("POST", "/api/clients", {"nombre": "Cuenta sintética TLS"}, cookie).status
+            == 201
+        )
+        assert request("POST", "/api/auth/logout", cookie=cookie).status == 204
+        assert request("GET", "/api/clients", cookie=cookie).status == 401
+    finally:
+        if connection:
+            connection.close()
+        server.should_exit = True
+        thread.join(timeout=5)
+        listener.close()
+    assert not thread.is_alive()
