@@ -11,10 +11,15 @@ from starlette.exceptions import HTTPException
 from backend.database.connection import Database
 from backend.router.router import router
 from backend.services.errors import LedgerError
-from backend.services.http_boundary import LocalBoundary
+from backend.services.https_boundary import HTTPSBoundary
+from backend.services.passwords import Credential
+from backend.services.session_boundary import SessionBoundary
+from backend.services.sessions import AuthService, LoginLimit
+from backend.services.transport import origin_host
 
 
-def create_app(database_path: Path) -> FastAPI:
+def create_app(database_path: Path, *, origin: str, credential: Credential) -> FastAPI:
+    origin_host(origin)
     database = Database(database_path)
 
     @asynccontextmanager
@@ -31,11 +36,14 @@ def create_app(database_path: Path) -> FastAPI:
         redirect_slashes=False,
     )
     app.state.database = database
-    app.add_middleware(LocalBoundary)
+    app.state.auth = AuthService(credential)
+    app.add_middleware(SessionBoundary, auth=app.state.auth)
+    app.add_middleware(HTTPSBoundary, origin=origin)
 
     @app.exception_handler(LedgerError)
     async def ledger_error(request: Request, error: LedgerError):
-        return JSONResponse({"error": str(error)}, status_code=error.status)
+        headers = {"Retry-After": str(error.seconds)} if isinstance(error, LoginLimit) else None
+        return JSONResponse({"error": str(error)}, status_code=error.status, headers=headers)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError):
