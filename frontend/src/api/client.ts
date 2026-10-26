@@ -57,6 +57,10 @@ export function httpAPI(): LedgerAPI {
     }
   }
   return {
+    priceSuggestions: (id, query) =>
+      request(
+        `/clients/${id}/price-suggestions?q=${encodeURIComponent(query)}`,
+      ),
     clients: () => request("/clients"),
     movements: (id) => request(`/clients/${id}/movements`),
     login: async (password) => {

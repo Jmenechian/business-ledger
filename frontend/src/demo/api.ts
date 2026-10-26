@@ -8,6 +8,7 @@ import { ApiError } from "../api/client";
 import { MAX_AMOUNT } from "../utils/format";
 import { syntheticData } from "./fixtures";
 import { DemoWorkSessions } from "./workSessions";
+import { demoPriceSuggestions } from "./priceSuggestions";
 
 // In-memory, synthetic-only adapter. It never fetches or opens a database.
 export function demoAPI(): LedgerAPI {
@@ -80,6 +81,14 @@ export function demoAPI(): LedgerAPI {
     return row;
   }
   return {
+    priceSuggestions: async (client, query) => {
+      if (!data.clients.some((item) => item.id === client))
+        throw new ApiError("Cliente no encontrado.", 404);
+      return demoPriceSuggestions(
+        data.movements.filter((row) => row.client_id === client),
+        query,
+      );
+    },
     clients: async () => copy(data.clients),
     movements: async (client) =>
       copy(data.movements.filter((row) => row.client_id === client)),

@@ -32,7 +32,8 @@ import { useLedger } from "./composables/useLedger";
 import { balanceLabel, dateLabel, money, sumAmounts } from "./utils/format";
 
 const demo = new URLSearchParams(window.location.search).get("demo") === "1";
-const ledger = useLedger(demo ? demoAPI() : httpAPI());
+const api = demo ? demoAPI() : httpAPI();
+const ledger = useLedger(api);
 const {
   authenticated,
   loading,
@@ -347,6 +348,7 @@ function requestDelete() {
       :busy="busy"
       :error="formError"
       :uncertain="editor.uncertain"
+      :load-suggestions="api.priceSuggestions"
       @save="ledger.save"
       @close="ledger.closeEditor"
     />

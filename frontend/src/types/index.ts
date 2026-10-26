@@ -32,6 +32,7 @@ export interface MovementInput {
   haber?: number;
 }
 export interface LedgerAPI {
+  priceSuggestions(client: number, query: string): Promise<PriceSuggestion[]>;
   clients(): Promise<Client[]>;
   movements(client: number): Promise<Movement[]>;
   login(password: string): Promise<void>;
@@ -59,6 +60,21 @@ export interface LedgerAPI {
   workSessions(): Promise<WorkSession[]>;
   startWorkSession(key: string): Promise<WorkSession>;
   finishWorkSession(id: number): Promise<WorkSession>;
+}
+
+export interface PriceReference {
+  movement_id: number;
+  detalle: string;
+  precio_original: number | null;
+  precio_unitario: number;
+  precio_derivado: boolean;
+  fecha: string | null;
+  added_date: string | null;
+}
+export interface PriceSuggestion {
+  detalle: string;
+  similitud: number;
+  referencias: PriceReference[];
 }
 
 export interface WorkEvent {

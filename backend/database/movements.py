@@ -20,6 +20,16 @@ def get_history(connection: sqlite3.Connection, client_id: int) -> list[Movement
     return [Movement(**dict(row)) for row in rows]
 
 
+def price_candidates(connection: sqlite3.Connection, client_id: int) -> list[Movement]:
+    rows = connection.execute(
+        f"SELECT {MOVEMENT_COLUMNS} FROM movements "
+        "WHERE client_id=? AND deleted_at IS NULL AND kind IN ('delivery', 'historical') "
+        "AND quantity>0 AND debit>0 ORDER BY id",
+        (client_id,),
+    ).fetchall()
+    return [Movement(**dict(row)) for row in rows]
+
+
 def last_balance(connection: sqlite3.Connection, client_id: int) -> int | float:
     row = connection.execute(
         "SELECT balance FROM movements WHERE client_id=? AND deleted_at IS NULL "
