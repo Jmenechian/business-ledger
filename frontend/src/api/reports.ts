@@ -1,5 +1,12 @@
 import { ApiError } from "./client";
 
+export function summaryFilename(clientName: string): string {
+  const name =
+    clientName.replace(/[<>:"/\\|?*\u0000-\u001f\u007f-\u009f]/g, "_") ||
+    "Cliente";
+  return `Resumen ${name}.pdf`;
+}
+
 export async function statementPDF(
   client: number,
   movement: number,

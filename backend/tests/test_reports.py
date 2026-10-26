@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from dataclasses import FrozenInstanceError
 from decimal import Decimal
+from urllib.parse import unquote
 
 import pytest
 
@@ -160,7 +161,8 @@ def test_statement_download_is_authenticated_and_has_no_mutations(
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.headers["content-disposition"] == (
-        f'attachment; filename="cuenta-{account["id"]}-movimientos-1-1.pdf"'
+        'attachment; filename="Resumen Sintetica _ _ _nombre_.pdf"; '
+        "filename*=UTF-8''Resumen%20Sint%C3%A9tica%20_%20_%20_nombre_.pdf"
     )
     assert response.headers["cache-control"] == "no-store"
     assert response.content.startswith(b"%PDF-") and len(captured) == 1
@@ -172,3 +174,20 @@ def test_statement_download_is_authenticated_and_has_no_mutations(
     client.post("/api/auth/logout")
     assert anonymous_client.get(url).status_code == 401
     assert len(captured) == 1
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("Órbita y Ñandú", "Resumen Órbita y Ñandú.pdf"),
+        ('Cuenta ../Norte\\Sur: A?B*<C>|"D"', "Resumen Cuenta .._Norte_Sur_ A_B__C___D_.pdf"),
+        ("Línea\r\nCabecera\t\x00\x85", "Resumen Línea__Cabecera___.pdf"),
+        ("", "Resumen Cliente.pdf"),
+    ],
+)
+def test_statement_filename_preserves_names_without_path_or_header_injection(name, expected):
+    assert reports.summary_filename(name) == expected
+    disposition = reports.download_disposition(name)
+    disposition.encode("ascii")
+    assert "\r" not in disposition and "\n" not in disposition
+    assert unquote(disposition.split("filename*=UTF-8''", 1)[1]) == expected

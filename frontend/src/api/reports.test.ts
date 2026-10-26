@@ -1,8 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { statementPDF } from "./reports";
+import { statementPDF, summaryFilename } from "./reports";
 
 afterEach(() => vi.unstubAllGlobals());
 describe("PDF download", () => {
+  it("names statements after the customer while preserving accents and spaces", () => {
+    expect(summaryFilename("Órbita y Ñandú")).toBe(
+      "Resumen Órbita y Ñandú.pdf",
+    );
+    expect(summaryFilename('Cuenta ../Norte\\Sur: A?B*<C>|"D"')).toBe(
+      "Resumen Cuenta .._Norte_Sur_ A_B__C___D_.pdf",
+    );
+    expect(summaryFilename("Línea\r\nCabecera\t\u0000\u0085")).toBe(
+      "Resumen Línea__Cabecera___.pdf",
+    );
+    expect(summaryFilename("")).toBe("Resumen Cliente.pdf");
+  });
   it("requests only the chosen customer and movement with authentication", async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response("%PDF-1.4", {
