@@ -1,6 +1,6 @@
 from backend.database import clients, movements
 from backend.database.connection import Database
-from backend.models.movement import DeliveryCreate, Movement
+from backend.models.movement import DeliveryCreate, Movement, PaymentCreate
 from backend.services import movements as rules
 from backend.services.errors import LedgerError
 from backend.services.money import next_balance
@@ -33,3 +33,7 @@ def append(
 
 def add_delivery(database: Database, client_id: int, key: str, input: DeliveryCreate):
     return append(database, client_id, key, rules.delivery(input))
+
+
+def add_payment(database: Database, client_id: int, key: str, input: PaymentCreate):
+    return append(database, client_id, key, rules.payment(input))

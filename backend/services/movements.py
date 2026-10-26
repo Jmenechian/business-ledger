@@ -1,7 +1,7 @@
 import hashlib
 import json
 
-from backend.models.movement import DeliveryCreate, Movement
+from backend.models.movement import DeliveryCreate, Movement, PaymentCreate
 from backend.services.errors import LedgerError
 from backend.services.money import MAX_AMOUNT, positive_amount
 
@@ -16,6 +16,16 @@ def delivery(input: DeliveryCreate) -> Movement:
         cant=input.cant,
         precio_unitario=price,
         debe=input.cant * price,
+        n_remito=input.n_remito or None,
+        fecha=input.fecha or None,
+    )
+
+
+def payment(input: PaymentCreate) -> Movement:
+    return Movement(
+        tipo="payment",
+        detalle=input.detalle,
+        haber=positive_amount(input.haber),
         n_remito=input.n_remito or None,
         fecha=input.fecha or None,
     )

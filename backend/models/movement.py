@@ -56,6 +56,16 @@ class DeliveryCreate(MovementInput):
         return value.strip() if isinstance(value, str) else value
 
 
+class PaymentCreate(MovementInput):
+    haber: Amount
+    detalle: str = Field(default="Pago", strict=True, max_length=500)
+
+    @field_validator("detalle", mode="before")
+    @classmethod
+    def description(cls, value):
+        return value.strip() or "Pago" if isinstance(value, str) else value
+
+
 class Movement(BaseModel):
     id: int = 0
     client_id: int = 0

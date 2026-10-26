@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, Response
 
 from backend.controllers import movement_controller
-from backend.models.movement import DeliveryCreate, Movement
+from backend.models.movement import DeliveryCreate, Movement, PaymentCreate
 from backend.router.dependencies import ClientID, DatabaseDependency
 from backend.router.json_route import ExactJSONRoute
 
@@ -34,4 +34,17 @@ def add_delivery(
 ):
     return movement_response(
         response, movement_controller.add_delivery(database, client_id, idempotency_key, input)
+    )
+
+
+@router.post("/payments", status_code=201, response_model=Movement)
+def add_payment(
+    client_id: ClientID,
+    input: PaymentCreate,
+    database: DatabaseDependency,
+    response: Response,
+    idempotency_key: RetryKey = "",
+):
+    return movement_response(
+        response, movement_controller.add_payment(database, client_id, idempotency_key, input)
     )
