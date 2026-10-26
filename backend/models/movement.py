@@ -58,6 +58,7 @@ class DeliveryCreate(MovementInput):
 
 class PaymentCreate(MovementInput):
     haber: Amount
+    fecha: str = Field(min_length=1)
     detalle: str = Field(default="Pago", strict=True, max_length=500)
 
     @field_validator("detalle", mode="before")

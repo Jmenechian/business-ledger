@@ -81,10 +81,10 @@ def test_statement_derivation_retains_original_price_and_large_historical_values
 def test_statement_excludes_deleted_rows_and_rejects_other_customer(database):
     account, other = synthetic_account(database), synthetic_account(database)
     deleted, _ = movement_controller.add_payment(
-        database, account.id, "deleted", PaymentCreate(haber=Decimal(5))
+        database, account.id, "deleted", PaymentCreate(haber=Decimal(5), fecha="2026-10-26")
     )
     kept, _ = movement_controller.add_payment(
-        database, account.id, "kept", PaymentCreate(haber=Decimal(8))
+        database, account.id, "kept", PaymentCreate(haber=Decimal(8), fecha="2026-10-26")
     )
     movement_controller.delete(database, account.id, deleted.id, deleted.revision)
     report = report_controller.get_statement(database, account.id, kept.id)
@@ -104,7 +104,7 @@ def test_statement_excludes_deleted_rows_and_rejects_other_customer(database):
 def test_statement_uses_consistent_read_snapshot_without_write_lock(database, monkeypatch):
     account = synthetic_account(database)
     row, _ = movement_controller.add_payment(
-        database, account.id, "first", PaymentCreate(haber=Decimal(10))
+        database, account.id, "first", PaymentCreate(haber=Decimal(10), fecha="2026-10-26")
     )
     original_history = report_controller.movements.get_history
     trace = []
@@ -121,7 +121,10 @@ def test_statement_uses_consistent_read_snapshot_without_write_lock(database, mo
     def read_then_concurrent_write(connection, client_id):
         # WAL writer can commit while the report holds its older read snapshot.
         movement_controller.add_payment(
-            database, account.id, "concurrent", PaymentCreate(haber=Decimal(20))
+            database,
+            account.id,
+            "concurrent",
+            PaymentCreate(haber=Decimal(20), fecha="2026-10-26"),
         )
         return original_history(connection, client_id)
 
@@ -139,7 +142,9 @@ def test_statement_download_is_authenticated_and_has_no_mutations(
     account = client.post("/api/clients", json={"nombre": 'Sintética " / <nombre>'}).json()
     path = f"/api/clients/{account['id']}"
     row = client.post(
-        path + "/payments", json={"haber": 20}, headers={"Idempotency-Key": "synthetic"}
+        path + "/payments",
+        json={"haber": 20, "fecha": "2026-10-26"},
+        headers={"Idempotency-Key": "synthetic"},
     ).json()
     history = client.get(path + "/movements").json()
     sessions = client.get("/api/work-sessions").json()

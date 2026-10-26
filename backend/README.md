@@ -60,7 +60,7 @@ Record a delivery:
 
 Detail, positive integer quantity and positive unit price are required. Unit price rounds first to whole currency units, with halves away from zero, then multiplies by quantity. A total charge cannot replace the unit price. New money/balances stay within ±9,007,199,254,740,991. Optional fecha uses YYYY-MM-DD; it never changes accounting order. Automatic added_date is UTC and separate from the commercial date. Presentation formatting remains an interface/reporting concern.
 
-Record a payment: `{"haber":2000,"detalle":"Pago de ejemplo"}`. Positive haber is required; detail defaults to Pago. Reference/date are optional. Balance is previous balance + debit - credit: positive debt, negative credit, zero settled.
+Record a payment: `{"haber":2000,"fecha":"2026-10-26","detalle":"Pago de ejemplo"}`. Positive haber and a valid commercial date are required when creating or correcting payments; detail defaults to Pago and the reference is optional. Delivery dates remain optional. Balance is previous balance + debit - credit: positive debt, negative credit, zero settled.
 
 ## Retries and corrections
 

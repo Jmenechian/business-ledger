@@ -73,7 +73,10 @@ function submit() {
       input.cant = positiveInteger(form.cant, "Cantidad");
       input.precio_unitario = positiveInteger(form.precio, "Precio unitario");
       deliveryTotal(input.cant, input.precio_unitario);
-    } else input.haber = positiveInteger(form.haber, "Importe");
+    } else {
+      input.haber = positiveInteger(form.haber, "Importe");
+      if (!input.fecha) throw new Error("Ingresá la fecha del pago.");
+    }
     emit("save", input);
   } catch (error) {
     form.validation = (error as Error).message;
@@ -187,11 +190,13 @@ function submit() {
             </div>
             <div>
               <label for="business-date"
-                >Fecha <span class="optional">opcional</span></label
+                >Fecha <span v-if="kind === 'payment'" class="required">*</span
+                ><span v-else class="optional">opcional</span></label
               ><input
                 id="business-date"
                 v-model="form.fecha"
                 type="date"
+                :required="kind === 'payment'"
                 min="0001-01-01"
                 max="9999-12-31"
               />

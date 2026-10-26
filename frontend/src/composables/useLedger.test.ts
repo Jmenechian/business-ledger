@@ -43,7 +43,7 @@ describe("ledger coordination and safe retries", () => {
       detalle: "Pago sintético",
       haber: 10,
       n_remito: "",
-      fecha: "",
+      fecha: "2026-10-26",
     });
     expect(ledger.editor.value).toBeNull();
     expect(ledger.toast.value).toBe("Pago guardado.");

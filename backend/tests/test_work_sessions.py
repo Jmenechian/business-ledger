@@ -30,7 +30,9 @@ def test_group_summary_audit_restart_and_frozen_close(database):
         DeliveryCreate(detalle="Entrega sintética", cant=2, precio_unitario=100),
         group.id,
     )
-    paid, _ = movements.add_payment(database, b.id, "b", PaymentCreate(haber=Decimal(50)), group.id)
+    paid, _ = movements.add_payment(
+        database, b.id, "b", PaymentCreate(fecha="2026-10-26", haber=Decimal(50)), group.id
+    )
     edited = movements.edit(
         database,
         a.id,
@@ -73,7 +75,9 @@ def test_group_summary_audit_restart_and_frozen_close(database):
     assert replay and replayed == corrected
     assert sessions.detail(reopened, group.id).activity_count == 4
     with pytest.raises(LedgerError) as error:
-        movements.add_payment(reopened, b.id, "b", PaymentCreate(haber=Decimal(50)), group.id)
+        movements.add_payment(
+            reopened, b.id, "b", PaymentCreate(fecha="2026-10-26", haber=Decimal(50)), group.id
+        )
     assert error.value.status == 410
     with reopened.connect() as connection:
         assert connection.execute("SELECT count(*) FROM work_events").fetchone()[0] == 5
@@ -82,7 +86,7 @@ def test_group_summary_audit_restart_and_frozen_close(database):
 def test_stale_or_missing_group_cannot_misattribute_writes(database):
     a = account(database)
     group, _ = sessions.start(database, "a")
-    input = PaymentCreate(haber=Decimal(10))
+    input = PaymentCreate(fecha="2026-10-26", haber=Decimal(10))
     with pytest.raises(LedgerError):
         movements.add_payment(database, a.id, "missing", input)
     assert movements.get_movements(database, a.id) == []
@@ -114,7 +118,9 @@ def test_journal_failure_rolls_back_movement_and_individual_session(database):
             "BEGIN SELECT RAISE(ABORT,'Synthetic journal failure'); END;"
         )
     with pytest.raises(sqlite3.IntegrityError):
-        movements.add_payment(database, a.id, "recoverable", PaymentCreate(haber=Decimal(10)))
+        movements.add_payment(
+            database, a.id, "recoverable", PaymentCreate(fecha="2026-10-26", haber=Decimal(10))
+        )
     assert movements.get_movements(database, a.id) == []
     with database.transaction() as connection:
         assert (
@@ -125,14 +131,16 @@ def test_journal_failure_rolls_back_movement_and_individual_session(database):
         )
         connection.execute("DROP TRIGGER synthetic_audit_failure")
     assert not movements.add_payment(
-        database, a.id, "recoverable", PaymentCreate(haber=Decimal(10))
+        database, a.id, "recoverable", PaymentCreate(fecha="2026-10-26", haber=Decimal(10))
     )[1]
 
 
 def test_closed_summaries_and_journal_cannot_be_changed(database):
     a = account(database)
     group, _ = sessions.start(database, "a")
-    movements.add_payment(database, a.id, "a", PaymentCreate(haber=Decimal(10)), group.id)
+    movements.add_payment(
+        database, a.id, "a", PaymentCreate(fecha="2026-10-26", haber=Decimal(10)), group.id
+    )
     sessions.finish(database, group.id)
     for sql in [
         "UPDATE work_events SET delta_credit=0",
@@ -158,7 +166,11 @@ def test_summary_totals_are_exact_beyond_javascript_integer_range(database):
             )
         else:
             movements.add_payment(
-                database, a.id, key, PaymentCreate(haber=Decimal(MAX_AMOUNT)), group.id
+                database,
+                a.id,
+                key,
+                PaymentCreate(fecha="2026-10-26", haber=Decimal(MAX_AMOUNT)),
+                group.id,
             )
     result = sessions.finish(database, group.id)
     assert result.debe == str(MAX_AMOUNT * 2) and result.haber == str(MAX_AMOUNT)
@@ -179,14 +191,16 @@ def test_authenticated_group_api_and_idempotent_close(client, anonymous_client):
     a = client.post("/api/clients", json={"nombre": "Cuenta sintética"}).json()["id"]
     assert (
         client.post(
-            f"/api/clients/{a}/payments", json={"haber": 10}, headers={"Idempotency-Key": "a"}
+            f"/api/clients/{a}/payments",
+            json={"fecha": "2026-10-26", "haber": 10},
+            headers={"Idempotency-Key": "a"},
         ).status_code
         == 409
     )
     assert (
         client.post(
             f"/api/clients/{a}/payments",
-            json={"haber": 10},
+            json={"fecha": "2026-10-26", "haber": 10},
             headers={"Idempotency-Key": "a", "X-Work-Session": str(group["id"])},
         ).status_code
         == 201

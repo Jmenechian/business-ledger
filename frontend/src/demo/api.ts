@@ -51,6 +51,18 @@ export function demoAPI(): LedgerAPI {
     kind: MovementKind,
     input: MovementInput,
   ): Movement {
+    if (kind === "payment") {
+      if (!Number.isSafeInteger(input.haber) || input.haber! <= 0)
+        throw new ApiError("Ingresá un importe positivo para el pago.", 400);
+      const date = input.fecha?.trim() ?? "";
+      const parsed = new Date(`${date}T00:00:00Z`);
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        !Number.isFinite(parsed.getTime()) ||
+        parsed.toISOString().slice(0, 10) !== date
+      )
+        throw new ApiError("Ingresá una fecha válida para el pago.", 400);
+    }
     return {
       id: id++,
       client_id: client,

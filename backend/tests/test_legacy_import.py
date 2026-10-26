@@ -49,11 +49,15 @@ def test_import_preserves_values_locks_history_and_captures_wal(tmp_path):
     with sqlite3.connect(archive) as copy:
         assert copy.execute("SELECT summary FROM transactions").fetchone()[0] == "Resumen sintetico"
     database = Database(destination)
-    payment, replayed = add_payment(database, 4, "synthetic-after-import", PaymentCreate(haber=5))
+    payment, replayed = add_payment(
+        database, 4, "synthetic-after-import", PaymentCreate(fecha="2026-10-26", haber=5)
+    )
     assert not replayed and payment.id > 9 and payment.saldo == 89
     delete(database, 4, payment.id, payment.revision)
     with pytest.raises(LedgerError) as deleted_retry:
-        add_payment(database, 4, "synthetic-after-import", PaymentCreate(haber=5))
+        add_payment(
+            database, 4, "synthetic-after-import", PaymentCreate(fecha="2026-10-26", haber=5)
+        )
     assert deleted_retry.value.status == 410
     with database.connect() as connection:
         assert connection.execute("SELECT balance FROM movements WHERE id=9").fetchone()[0] == 93.75

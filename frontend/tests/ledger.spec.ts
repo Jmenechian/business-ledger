@@ -97,6 +97,7 @@ test("records a payment, creates an empty client and renders untrusted text safe
     .getByRole("button", { name: "Registrar pago", exact: true })
     .click();
   await page.getByLabel("Importe recibido").fill("2500");
+  await page.getByLabel(/^Fecha/).fill("2026-10-26");
   await page.getByRole("button", { name: "Guardar pago", exact: true }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   if (testInfo.project.name === "mobile")
