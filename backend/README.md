@@ -72,7 +72,7 @@ A deleted creation retry returns 410; different data with its key still returns 
 
 Imported rows are immutable by SQLite triggers. Inconsistent quantities, unit prices, amounts and stored balances remain unchanged; missing prices/timestamps remain missing. New rows continue from the last visible stored balance. Fractional imported balances are preserved; only the next native balance is rounded. There is no import HTTP endpoint.
 
-Versioned migrations recognize only the ledger application ID and supported schema versions. Fresh databases and schema-v1 upgrades reach v2 atomically. Original Go creation fingerprints remain compatible, including Unicode/HTML escaping; tests use an original Go-generated synthetic fingerprint. Unrelated databases and future versions are rejected. Code support for schema upgrades does not authorize opening an actual business database; deployment/import is a separate explicit task.
+Versioned migrations recognize only the ledger application ID and supported schema versions. Fresh databases and schema-v1/v2 upgrades reach v3 atomically. Original Go creation fingerprints remain compatible, including Unicode/HTML escaping; tests use an original Go-generated synthetic fingerprint. Unrelated databases and future versions are rejected. Code support for schema upgrades does not authorize opening an actual business database; deployment/import is a separate explicit task.
 
 
 ## Password and HTTPS setup
@@ -104,7 +104,7 @@ Validate certificate trust and login from each target device before deployment. 
 
 ## Authentication sessions
 
-Only GET /api/health and POST /api/auth/login are public over the configured HTTPS origin. Every ledger read/write requires a valid session. Every mutation, including login and logout, requires Origin to match the configured origin exactly. Browser requests from other origins are rejected. Command-line clients must send the same Origin header, retain cookies and perform normal certificate verification.
+The public API routes are GET /api/health and POST /api/auth/login over the configured HTTPS origin. The compiled interface at / and its /assets/ files are also public; account data remains authenticated. Every ledger read/write requires a valid session. Every mutation, including login and logout, requires Origin to match the configured origin exactly. Browser requests from other origins are rejected. Command-line clients must send the same Origin header, retain cookies and perform normal certificate verification.
 
 Login body: `{"password":"<configured password>"}`. Success sets an opaque __Host-ledger cookie with Secure, HttpOnly, SameSite=Strict, Path=/ and no Domain. Passwords and cookies are never returned as JSON or logged by the authentication code. The server retains only token hashes. A successful login rotates any presented prior session.
 
@@ -113,3 +113,26 @@ Sessions expire after 30 minutes idle or eight hours total. POST /api/auth/logou
 Login hashing is serialized with a global budget of five attempts per minute; exhaustion returns 429 with Retry-After. At most 64 active sessions are retained. Missing/expired sessions return 401. The global budget can temporarily deny legitimate login under repeated attempts; this single-account baseline is intended for a private LAN, not Internet exposure.
 
 To change or recover a password, stop the server, explicitly remove the old private password file, run the password setup command again, and restart. This revokes existing sessions without deleting or changing the ledger. There is no remote password-reset endpoint.
+
+
+## Local work transfers and activity journal
+
+Work transfers are commercial work sessions, separate from authentication sessions and SQL transactions. One manual group can be open per ledger, shared across devices and customers. Entries confirmed outside a manual group receive individual closed work sessions automatically. Migrated native rows retain membership in an explicit legacy session; imported rows are untouched and no missing historical timestamps are fabricated.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | /api/work-sessions | Start a group; Idempotency-Key required |
+| GET | /api/work-sessions/active | Recover the active group or null |
+| GET | /api/work-sessions | Latest 50 manual groups, newest first |
+| GET | /api/work-sessions/{id} | Full activity and summary |
+| POST | /api/work-sessions/{id}/finish | Close once and return its frozen summary |
+
+These routes require authentication; mutation routes require the configured Origin. Start/finish have no JSON body. Creation retries reuse their start key, including after closure. Finishing is idempotent, preserves the first closure timestamp and never reapplies any movements. An open group survives server restart and login expiration.
+
+While a group is active, movement creation/corrections must send X-Work-Session with its ID. A missing or closed group reference returns 409 so a stale device cannot silently assign work to a different group. An original creation retry is resolved before checking current group status: it never creates another movement or journal entry, including after the group closes. An edit/delete records its activity in the current work session while retaining the movement's original session membership.
+
+Every native create/edit/delete and its journal event commit in the same immediate transaction. Events retain customer identity, target values before/after, affected native balance/revision snapshots, accounting deltas and UTC timestamps. SQLite triggers prohibit journal updates/deletions and changes to closed summaries. Failure to save the journal rolls back the ledger write. This is a local application audit trail in the authoritative SQLite file, not an independent backup of that file. Runtime journals and ledger files remain private and outside Git. Retention/backup policy is a later task.
+
+Summaries include activity counts, deliveries, payments, edits, deletions, per-customer details, debit/credit changes and their net. Aggregate money is returned as decimal integer strings so totals remain exact beyond JavaScript's safe integer range. Corrections contribute their difference; deletion removes the deleted amount from the group's net. The net describes this set of actions, not the full balance of all accounts. Closed summaries remain unchanged when later work corrects an earlier entry. Automatic rollback and cloud publication are separate features.
+
+The backend serves the compiled frontend from frontend/dist on the same HTTPS origin. Build it first as described in [frontend setup](../frontend/README.md). An absent build returns an explicit 503 at / while the API remains available. API authentication is enforced independently of the interface.

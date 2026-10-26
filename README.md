@@ -2,7 +2,7 @@
 
 A customer account ledger for tracking deliveries, payments, and running balances.
 
-The Python/FastAPI backend uses SQLite and provides client accounts, delivery and payment entry, revision-checked corrections, whole-number calculations, durable retry protection, and password-protected HTTPS access. Imported history stays immutable. Planned features include a Spanish web interface, customer-specific price suggestions, PDF statements, and Google Drive snapshots for a read-only viewer.
+The Python/FastAPI backend uses SQLite and provides client accounts, delivery and payment entry, revision-checked corrections, whole-number calculations, durable retry protection, password-protected HTTPS access, and a Spanish PC/mobile interface. Work sessions group confirmed activity into locally retained summaries and audit records. Imported history stays immutable. Planned features include customer-specific price suggestions, PDF statements, and Google Drive snapshots for a read-only viewer.
 
 Requires Python 3.11 or later with SQLite 3.37 or later. From the repository root:
 
@@ -20,3 +20,13 @@ python -m ruff format --check backend
 ```
 
 Starting the server requires a private password file and a trusted TLS certificate. HTTPS is mandatory on loopback and LAN; no default credentials exist. See [backend setup and API usage](backend/README.md) for configuration, architecture, endpoints, and examples.
+
+Build the interface with Node.js 22.12+ before starting the HTTPS server:
+
+```sh
+cd frontend
+npm ci
+npm run build
+```
+
+See [frontend development and synthetic preview](frontend/README.md) for the isolated demo, PC/mobile workflows and browser checks.
