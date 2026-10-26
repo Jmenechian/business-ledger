@@ -40,7 +40,7 @@ class ExactJSONRoute(APIRoute):
         handler = super().get_route_handler()
 
         async def handle(request: Request):
-            if request.method in {"POST", "PUT", "PATCH"}:
+            if self.body_field is not None and request.method in {"POST", "PUT", "PATCH"}:
                 media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
                 if media != "application/json":
                     raise LedgerError("se requiere Content-Type application/json")

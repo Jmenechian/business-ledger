@@ -92,3 +92,7 @@ class AuthService:
                 return False
             session.last_activity = now
             return True
+
+    def logout(self, token: str) -> None:
+        with self.lock:
+            self.sessions.pop(self.token_key(token), None)

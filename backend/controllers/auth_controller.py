@@ -4,3 +4,7 @@ from backend.services.sessions import AuthService, Login
 
 def login(auth: AuthService, input: LoginRequest, prior_token: str) -> Login:
     return auth.login(input.password.get_secret_value(), prior_token)
+
+
+def logout(auth: AuthService, token: str) -> None:
+    auth.logout(token)

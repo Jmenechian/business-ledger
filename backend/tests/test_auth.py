@@ -106,3 +106,19 @@ def test_invalid_login_payloads_are_generic(anonymous_client):
         response = anonymous_client.post("/api/auth/login", json=payload)
         assert response.status_code == 400
         assert "password" not in response.text and "unknown" not in response.text
+
+
+def test_logout_revokes_cookie_and_cannot_be_cross_origin(client):
+    token = client.cookies.get(COOKIE_NAME)
+    assert (
+        client.post("/api/auth/logout", headers={"Origin": "https://evil.invalid"}).status_code
+        == 403
+    )
+    assert client.get("/api/clients").status_code == 200
+    assert client.get("/api/auth/logout").status_code == 405
+    response = client.post("/api/auth/logout")
+    assert response.status_code == 204
+    assert "max-age=0" in response.headers["set-cookie"].lower()
+    assert not client.app.state.auth.authenticate(token)
+    assert client.get("/api/clients").status_code == 401
+    assert client.post("/api/auth/logout").status_code == 401

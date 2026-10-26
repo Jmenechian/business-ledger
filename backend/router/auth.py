@@ -23,3 +23,11 @@ def login(input: LoginRequest, request: Request, response: Response):
         path="/",
     )
     return {"estado": "sesión iniciada"}
+
+
+@router.post("/logout", status_code=204)
+def logout(request: Request):
+    auth_controller.logout(request.app.state.auth, request.cookies.get(COOKIE_NAME, ""))
+    response = Response(status_code=204)
+    response.delete_cookie(COOKIE_NAME, path="/", secure=True, httponly=True, samesite="strict")
+    return response
