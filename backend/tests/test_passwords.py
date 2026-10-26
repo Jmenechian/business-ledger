@@ -9,18 +9,11 @@ from backend.services.passwords import (
     write_credential,
 )
 
-SYNTHETIC_PASSWORD = "Contraseña sintética de pruebas 42"
 
-
-@pytest.fixture(scope="session")
-def credential():
-    return create_credential(SYNTHETIC_PASSWORD)
-
-
-def test_password_verification_and_random_salts(credential):
-    assert credential.verify(SYNTHETIC_PASSWORD)
+def test_password_verification_and_random_salts(credential, synthetic_password):
+    assert credential.verify(synthetic_password)
     assert not credential.verify("wrong")
-    assert create_credential(SYNTHETIC_PASSWORD) != credential
+    assert create_credential(synthetic_password) != credential
     assert "argon2" not in repr(credential)
 
 

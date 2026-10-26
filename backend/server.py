@@ -6,6 +6,7 @@ from pathlib import Path
 import uvicorn
 
 from backend.main import create_app
+from backend.services.passwords import read_credential
 from backend.services.transport import Transport
 
 
@@ -17,16 +18,18 @@ def main() -> None:
     parser.add_argument("--origin", required=True)
     parser.add_argument("--tls-cert", type=Path, required=True)
     parser.add_argument("--tls-key", type=Path, required=True)
+    parser.add_argument("--password-file", type=Path, default=Path("private/password.json"))
     arguments = parser.parse_args()
     try:
         transport = Transport(
             arguments.bind, arguments.port, arguments.origin, arguments.tls_cert, arguments.tls_key
         )
         context = transport.ssl_context()
+        credential = read_credential(arguments.password_file)
     except ValueError as error:
         parser.error(str(error))
     configuration = uvicorn.Config(
-        create_app(arguments.db, origin=arguments.origin),
+        create_app(arguments.db, origin=arguments.origin, credential=credential),
         host=arguments.bind,
         port=arguments.port,
         ssl_context_factory=lambda config, factory: context,
