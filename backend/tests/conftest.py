@@ -17,8 +17,9 @@ def database(tmp_path: Path) -> Database:
 @pytest.fixture
 def client(tmp_path: Path):
     with TestClient(
-        create_app(tmp_path / "synthetic-api.db"),
-        base_url="http://localhost",
+        create_app(tmp_path / "synthetic-api.db", origin="https://localhost:8443"),
+        base_url="https://localhost:8443",
+        headers={"Origin": "https://localhost:8443"},
         raise_server_exceptions=False,
     ) as client:
         yield client
