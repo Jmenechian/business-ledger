@@ -780,6 +780,7 @@ h1 {
 }
 .selection-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -1364,6 +1365,9 @@ h1 {
   }
   .selection-actions {
     justify-content: flex-end;
+  }
+  .selection-actions .pdf-download {
+    flex-basis: 100%;
   }
   .selection-info strong {
     font-size: 11px;

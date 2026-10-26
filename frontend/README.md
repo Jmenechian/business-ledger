@@ -1,6 +1,6 @@
 # PC and mobile interface
 
-Vue 3, strict TypeScript and Vite. Requires Node.js 22.12 or later. This is the writer interface; the offline laptop viewer, PDF generation, price matching and Drive integration are separate milestones.
+Vue 3, strict TypeScript and Vite. Requires Node.js 22.12 or later. This is the writer interface; the offline laptop viewer and Drive integration are separate milestones.
 
 From this directory:
 
@@ -26,8 +26,10 @@ Open `http://127.0.0.1:5173/?demo=1`. The explicit demo switch uses an isolated 
 - Search/select a client, or create an empty account.
 - Read all eight accounting columns on desktop. Mobile offers a summary and a horizontally scrollable complete table.
 - Register whole-number deliveries/payments with optional reference/date. Delivery price adjustment buttons round before calculating the total.
+- While entering a delivery detail, select a price reference from that customer's own history. Matching tolerates accents, word order and typos. Selecting a reference fills only the price; other draft fields remain unchanged. Derived prices are marked and unknown historical creation dates remain unknown. Manual entry works even if lookup fails.
 - Select a native movement to edit or delete. Imported history is protected; missing historical prices can be derived for presentation without writing them back.
 - Start a work transfer, record activity across clients, then finish to see deliveries, payments, corrections, exact partial totals and client/activity details. History opens prior summaries. An open backend work transfer survives browser/server restarts.
+- Select any row and choose **Descargar PDF desde aquí** for a direct statement download through the last row. No work transfer is required. Open the downloaded file to view/print it. The in-memory demo does not generate PDFs; the synthetic HTTPS browser test verifies the actual download.
 
 All creation attempts retain one Idempotency-Key while the response is uncertain, including after closing/reopening the draft. The original customer, payload and work-session header are retained for that retry. A successful write stays confirmed if its later refresh fails. Corrections send If-Match revisions and refresh on conflict. Refreshing the entire page discards in-memory drafts; inspect history before manually recreating an operation whose result was uncertain. Logout is available independently of work-session closure; logging back in recovers the active backend group.
 

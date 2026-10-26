@@ -2,6 +2,8 @@
 import { computed, reactive } from "vue";
 import { ArrowRight, Info } from "@lucide/vue";
 import FormDialog from "./FormDialog.vue";
+import PriceSuggestions from "./PriceSuggestions.vue";
+import type { SuggestionLoader } from "../composables/usePriceSuggestions";
 import type { Client, Movement, MovementInput, MovementKind } from "../types";
 import {
   adjustPrice,
@@ -18,6 +20,7 @@ const props = defineProps<{
   busy: boolean;
   error: string;
   uncertain: boolean;
+  loadSuggestions?: SuggestionLoader;
 }>();
 const emit = defineEmits<{ save: [input: MovementInput]; close: [] }>();
 const form = reactive({
@@ -108,6 +111,15 @@ function submit() {
             maxlength="500"
             :placeholder="
               kind === 'delivery' ? 'Ej.: Remeras de algodón · costura' : 'Pago'
+            "
+          />
+          <PriceSuggestions
+            v-if="kind === 'delivery' && !row && !uncertain && loadSuggestions"
+            :client="client.id"
+            :query="form.detalle"
+            :load="loadSuggestions"
+            @select="
+              (reference) => (form.precio = String(reference.precio_unitario))
             "
           />
           <div v-if="kind === 'delivery'" class="field-grid">
