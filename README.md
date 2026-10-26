@@ -2,33 +2,22 @@
 
 A customer account ledger for tracking deliveries, payments, and running balances.
 
-## Technologies
+The Python/FastAPI backend uses SQLite and provides client accounts, delivery and payment entry, revision-checked corrections, whole-number calculations, and durable retry protection. Imported history stays immutable. Planned features include a Spanish web interface, customer-specific price suggestions, PDF statements, and Google Drive snapshots for a read-only viewer.
 
-- Go backend
-- SQLite database
-- GitHub Actions for Windows and Linux checks
-
-The first backend milestone provides client accounts, delivery and payment entry, whole-number calculations, and retry protection. Planned features include a Spanish web interface, customer-specific price suggestions, PDF statements, and Google Drive snapshots for a read-only viewer.
-
-## Run
-
-Requires Go 1.26 or later.
+Requires Python 3.11 or later with SQLite 3.37 or later. From the repository root:
 
 ```sh
-cd backend
-go run ./cmd/server
+python -m venv .venv
 ```
 
-The development API listens on `http://127.0.0.1:8080` and creates a local database at `backend/data/ledger.db`. Authentication and network access are planned; this milestone runs on localhost only.
-
-## Checks
-
-From `backend/`:
+Activate the environment (`.venv/Scripts/Activate.ps1` in PowerShell or `source .venv/bin/activate` on Linux), then:
 
 ```sh
-go test ./...
-go vet ./...
-go build ./...
+python -m pip install -r backend/requirements-dev.txt
+python -m backend.server
+python -m pytest -q
+python -m ruff check backend
+python -m ruff format --check backend
 ```
 
-See [backend API usage](backend/README.md) for endpoints and request examples.
+The development listener is restricted to loopback until the authentication/HTTPS milestone. See [backend setup and API usage](backend/README.md) for architecture, endpoints, and examples.
