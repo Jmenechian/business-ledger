@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterator
 
 APPLICATION_ID = 1112294471
+MIGRATIONS = Path(__file__).parent / "migrations"
 
 
 class Database:
@@ -35,8 +36,10 @@ class Database:
                 raise
 
     def initialize(self) -> None:
+        if sqlite3.sqlite_version_info < (3, 37, 0):
+            raise ValueError("se requiere SQLite 3.37 o posterior")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        migrations = sorted((Path(__file__).parent / "migrations").glob("*.sql"))
+        migrations = sorted(MIGRATIONS.glob("*.sql"))
         with self.transaction() as connection:
             app = connection.execute("PRAGMA application_id").fetchone()[0]
             version = connection.execute("PRAGMA user_version").fetchone()[0]
