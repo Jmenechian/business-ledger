@@ -34,6 +34,7 @@ import { useLedger } from "./composables/useLedger";
 import { balanceLabel, dateLabel, money, sumAmounts } from "./utils/format";
 
 const demo = new URLSearchParams(window.location.search).get("demo") === "1";
+const encrypted = window.location.protocol === "https:";
 const api = demo ? demoAPI() : httpAPI();
 const ledger = useLedger(api);
 const pdfBusy = ref(false);
@@ -284,7 +285,7 @@ async function downloadPDF() {
               :disabled="disabled || pdfBusy || demo"
               :title="
                 demo
-                  ? 'La descarga se prueba con el servidor HTTPS de evaluación.'
+                  ? 'Disponible en la aplicación; esta demo no genera PDF.'
                   : 'Desde esta fila hasta el final del historial'
               "
               @click="downloadPDF"
@@ -345,7 +346,9 @@ async function downloadPDF() {
         ><span>{{
           demo
             ? "Demostración con datos sintéticos"
-            : "Libro privado · Conexión segura"
+            : encrypted
+              ? "Libro privado · Conexión segura"
+              : "Red local · Acceso con contraseña"
         }}</span>
       </footer>
     </main>

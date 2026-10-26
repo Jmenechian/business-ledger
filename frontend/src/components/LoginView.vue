@@ -5,6 +5,7 @@ defineProps<{ busy: boolean; error: string }>();
 const emit = defineEmits<{ login: [password: string] }>();
 const password = ref("");
 const visible = ref(false);
+const encrypted = window.location.protocol === "https:";
 function submit() {
   const value = password.value;
   password.value = "";
@@ -54,7 +55,9 @@ function submit() {
         </button>
       </form>
       <p class="login-note">
-        <LockKeyhole :size="14" /> Conexión segura · Acceso con contraseña
+        <LockKeyhole :size="14" />
+        {{ encrypted ? "Conexión segura" : "Red local" }} · Acceso con
+        contraseña
       </p>
       <a class="demo-link" href="/?demo=1"
         >Explorar con datos de ejemplo <ArrowRight :size="14"

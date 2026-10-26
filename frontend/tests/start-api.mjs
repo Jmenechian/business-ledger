@@ -11,7 +11,11 @@ const local = path.join(
 );
 const child = spawn(
   existsSync(local) ? local : "python",
-  ["-m", "backend.tests.browser_server"],
+  [
+    "-m",
+    "backend.tests.browser_server",
+    ...(process.argv.includes("--http") ? ["--http"] : []),
+  ],
   { cwd: root, stdio: "inherit" },
 );
 for (const signal of ["SIGINT", "SIGTERM"])

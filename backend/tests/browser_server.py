@@ -1,5 +1,6 @@
 """Isolated browser-test server. Always uses a newly generated temporary ledger."""
 
+import argparse
 import ipaddress
 import ssl
 from datetime import datetime, timedelta, timezone
@@ -19,6 +20,9 @@ from backend.services.passwords import create_credential
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Servidor aislado con datos sintéticos")
+    parser.add_argument("--http", action="store_true")
+    use_http = parser.parse_args().http
     with TemporaryDirectory(prefix="ledger-synthetic-browser-") as folder:
         directory = Path(folder)
         key = ec.generate_private_key(ec.SECP256R1())
@@ -50,19 +54,21 @@ def main():
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(cert_path, key_path)
+        origin = "http://127.0.0.1:4177" if use_http else "https://127.0.0.1:4176"
         app = create_app(
             directory / "synthetic.db",
-            origin="https://127.0.0.1:4176",
+            origin=origin,
             credential=create_credential("Contraseña sintética para navegador 42"),
+            **({"allow_http": True} if use_http else {}),
         )
         app.state.database.initialize()
         create_client(app.state.database, ClientCreate(nombre="Cuenta sintética API"))
         config = uvicorn.Config(
             app,
             host="127.0.0.1",
-            port=4176,
+            port=4177 if use_http else 4176,
             loop="backend.services.event_loop:create_server_loop",
-            ssl_context_factory=lambda config, factory: context,
+            **({} if use_http else {"ssl_context_factory": lambda config, factory: context}),
             proxy_headers=False,
             access_log=False,
             log_level="warning",

@@ -11,29 +11,40 @@ from backend.services.transport import Transport
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Servidor HTTPS de Business Ledger")
+    parser = argparse.ArgumentParser(description="Servidor de Business Ledger; HTTPS por defecto")
     parser.add_argument("--db", type=Path, default=Path("data/ledger.db"))
     parser.add_argument("--port", type=int, default=8443)
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--origin", required=True)
-    parser.add_argument("--tls-cert", type=Path, required=True)
-    parser.add_argument("--tls-key", type=Path, required=True)
+    parser.add_argument("--tls-cert", type=Path)
+    parser.add_argument("--tls-key", type=Path)
+    parser.add_argument("--allow-http", action="store_true", help="Permitir HTTP en la red privada")
     parser.add_argument("--password-file", type=Path, default=Path("private/password.json"))
     arguments = parser.parse_args()
     try:
         transport = Transport(
-            arguments.bind, arguments.port, arguments.origin, arguments.tls_cert, arguments.tls_key
+            arguments.bind,
+            arguments.port,
+            arguments.origin,
+            arguments.tls_cert,
+            arguments.tls_key,
+            allow_http=arguments.allow_http,
         )
         context = transport.ssl_context()
         credential = read_credential(arguments.password_file)
     except ValueError as error:
         parser.error(str(error))
     configuration = uvicorn.Config(
-        create_app(arguments.db, origin=arguments.origin, credential=credential),
+        create_app(
+            arguments.db,
+            origin=arguments.origin,
+            credential=credential,
+            allow_http=arguments.allow_http,
+        ),
         host=arguments.bind,
         port=arguments.port,
         loop="backend.services.event_loop:create_server_loop",
-        ssl_context_factory=lambda config, factory: context,
+        ssl_context_factory=(lambda config, factory: context) if context is not None else None,
         proxy_headers=False,
         access_log=False,
         server_header=False,

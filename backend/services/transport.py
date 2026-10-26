@@ -1,4 +1,4 @@
-"""Explicit private-interface TLS configuration, with no proxy trust."""
+"""Explicit private-interface transport; plaintext requires deliberate opt-in."""
 
 import ipaddress
 import ssl
@@ -10,23 +10,42 @@ from urllib.parse import urlsplit
 from cryptography import x509
 from cryptography.x509.oid import ExtendedKeyUsageOID
 
+PRIVATE_NETWORKS = tuple(
+    map(ipaddress.ip_network, ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"))
+)
 
-def origin_host(origin: str) -> str:
+
+def private_address(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address)
+        return ip.is_loopback or any(ip in network for network in PRIVATE_NETWORKS)
+    except ValueError:
+        return False
+
+
+def origin_host(origin: str, allow_http: bool = False) -> str:
     try:
         url = urlsplit(origin)
         if (
-            url.scheme != "https"
+            url.scheme not in ({"https", "http"} if allow_http else {"https"})
             or not url.hostname
             or not url.port
             or url.username is not None
-            or origin != "https://" + url.netloc
+            or origin != url.scheme + "://" + url.netloc
             or not origin.isascii()
+        ):
+            raise ValueError()
+        if (
+            url.scheme == "http"
+            and url.hostname != "localhost"
+            and not private_address(url.hostname)
         ):
             raise ValueError()
         return url.netloc
     except ValueError:
         raise ValueError(
-            "indique un origen HTTPS exacto con puerto, sin ruta ni credenciales"
+            "indique un origen HTTPS exacto con puerto, sin ruta ni credenciales; "
+            "HTTP privado requiere habilitación explícita"
         ) from None
 
 
@@ -47,23 +66,23 @@ class Transport:
     bind: str
     port: int
     origin: str
-    certificate: Path
-    key: Path
+    certificate: Path | None = None
+    key: Path | None = None
+    allow_http: bool = False
 
-    def ssl_context(self) -> ssl.SSLContext:
-        allowed_networks = map(
-            ipaddress.ip_network, ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7")
-        )
-        try:
-            ip = ipaddress.ip_address(self.bind)
-            if not (ip.is_loopback or any(ip in network for network in allowed_networks)):
-                raise ValueError()
-        except ValueError:
-            raise ValueError("la dirección debe ser una IP privada o loopback explícita") from None
-        origin_host(self.origin)
+    def ssl_context(self) -> ssl.SSLContext | None:
+        if not private_address(self.bind):
+            raise ValueError("la dirección debe ser una IP privada o loopback explícita")
+        origin_host(self.origin, allow_http=self.allow_http)
         url = urlsplit(self.origin)
         if not 1 <= self.port <= 65535 or url.port != self.port:
             raise ValueError("el puerto del origen debe coincidir con el del servidor")
+        if url.scheme == "http":
+            if self.certificate is not None or self.key is not None:
+                raise ValueError("HTTP no admite archivos TLS; elija una sola configuración")
+            return None
+        if self.certificate is None or self.key is None:
+            raise ValueError("HTTPS requiere certificado y clave TLS")
         try:
             certificate = x509.load_pem_x509_certificate(self.certificate.read_bytes())
             now = datetime.now(timezone.utc)
