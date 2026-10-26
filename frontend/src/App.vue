@@ -252,6 +252,7 @@ async function downloadPDF() {
           </div>
         </div>
         <LedgerTable
+          :client-id="clientID"
           :rows="rows"
           :selected="selectedID"
           :loading="loading"

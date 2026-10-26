@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -11,12 +11,44 @@ import type { Movement } from "../types";
 import { dateLabel, money, unitPrice } from "../utils/format";
 
 const props = defineProps<{
+  clientId: number | null;
   rows: Movement[];
   selected: number | null;
   loading: boolean;
 }>();
 defineEmits<{ select: [id: number] }>();
 const mode = ref<"summary" | "table">("summary");
+const tableScroll = ref<HTMLElement | null>(null);
+const cards = ref<HTMLElement | null>(null);
+let lastClient: number | null = null;
+let lastMode = "";
+let lastElement: HTMLElement | null = null;
+watch(
+  [() => props.clientId, () => props.loading, mode],
+  async ([client, loading, view]) => {
+    if (loading || client === null) return;
+    await nextTick();
+    if (props.loading || props.clientId !== client || mode.value !== view)
+      return;
+    const visibleCards =
+      cards.value && cards.value.offsetParent !== null ? cards.value : null;
+    const element = visibleCards ?? tableScroll.value;
+    if (client === lastClient && view === lastMode && element === lastElement)
+      return;
+    if (visibleCards) {
+      visibleCards.lastElementChild?.scrollIntoView({
+        block: "end",
+        behavior: "auto",
+      });
+    } else if (tableScroll.value) {
+      tableScroll.value.scrollTop = tableScroll.value.scrollHeight;
+    }
+    lastClient = client;
+    lastMode = view;
+    lastElement = element;
+  },
+  { immediate: true, flush: "post" },
+);
 const nativeCount = computed(
   () => props.rows.filter((row) => row.origin === "native").length,
 );
@@ -53,7 +85,7 @@ const nativeCount = computed(
         ><span class="status-dot"></span> Libro actualizado</span
       >
     </div>
-    <div v-if="loading" class="empty-state" role="status">
+    <div v-if="loading && !rows.length" class="empty-state" role="status">
       <span class="spinner"></span>
       <h3>Cargando cuenta…</h3>
     </div>
@@ -67,6 +99,7 @@ const nativeCount = computed(
     </div>
     <template v-else>
       <div
+        ref="tableScroll"
         class="table-scroll"
         :class="{ 'mobile-table': mode === 'table' }"
         tabindex="0"
@@ -150,7 +183,11 @@ const nativeCount = computed(
           </tbody>
         </table>
       </div>
-      <div v-if="mode === 'summary'" class="movement-cards mobile-only">
+      <div
+        v-if="mode === 'summary'"
+        ref="cards"
+        class="movement-cards mobile-only"
+      >
         <button
           v-for="(row, index) in rows"
           :key="row.id"
