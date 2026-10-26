@@ -16,9 +16,12 @@ import (
 const MaxAmount int64 = 9007199254740991 // Exact integer range shared with JavaScript.
 
 var (
-	ErrInvalid  = errors.New("datos inválidos")
-	ErrNotFound = errors.New("cliente no encontrado")
-	ErrConflict = errors.New("la clave de reintento ya se utilizó con otros datos")
+	ErrDeleted   = errors.New("el movimiento fue eliminado; la clave no puede reutilizarse")
+	ErrImmutable = errors.New("el historial importado no se puede modificar")
+	ErrStale     = errors.New("el movimiento cambió; actualice el historial antes de corregirlo")
+	ErrInvalid   = errors.New("datos inválidos")
+	ErrNotFound  = errors.New("cliente no encontrado")
+	ErrConflict  = errors.New("la clave de reintento ya se utilizó con otros datos")
 )
 
 type Client struct {
@@ -30,6 +33,8 @@ type Client struct {
 
 // Number preserves historical fractional values on reads; native amounts are integers.
 type Movement struct {
+	Revision     int64        `json:"revision,omitempty"`
+	ModifiedAt   *string      `json:"modified_at,omitempty"`
 	ID           int64        `json:"id"`
 	ClientID     int64        `json:"client_id"`
 	Origin       string       `json:"origin"`

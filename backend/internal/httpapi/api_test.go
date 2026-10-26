@@ -132,7 +132,7 @@ func TestRoutingAndBrowserBoundaries(t *testing.T) {
 	}{
 		{"GET", "/api/health", 200}, {"GET", "/api/clients/nope", 400},
 		{"GET", "/api/clients/99999", 404}, {"GET", "/unknown", 404},
-		{"DELETE", "/api/clients", 405}, {"PUT", "/api/clients/1/movements/1", 404},
+		{"DELETE", "/api/clients", 405}, {"PUT", "/api/clients/1/movements/1", 405},
 	} {
 		w := request(h, tc.method, tc.path, "", "")
 		if w.Code != tc.status || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
@@ -165,5 +165,42 @@ func TestRejectsForeignHost(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("foreign Host accepted: %d", w.Code)
+	}
+}
+
+func TestCorrectionHTTPContract(t *testing.T) {
+	h := testAPI(t)
+	id := create(t, h, "Cuenta sintética")
+	base := fmt.Sprintf("/api/clients/%d", id)
+	w := request(h, "POST", base+"/payments", `{"haber":100}`, "original")
+	var m ledger.Movement
+	json.Unmarshal(w.Body.Bytes(), &m)
+	path := fmt.Sprintf("%s/movements/%d", base, m.ID)
+	if w := request(h, "DELETE", path, "", ""); w.Code != 428 {
+		t.Fatal(w.Code)
+	}
+	run := func(method, path, body, revision string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Host = "localhost"
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("If-Match", revision)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := run("PUT", path+"/payment", `{"haber":50}`, `"1"`); w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	if w := run("DELETE", path, "", `"1"`); w.Code != 409 {
+		t.Fatal(w.Code)
+	}
+	if w := run("DELETE", path, "", `"2"`); w.Code != 204 {
+		t.Fatal(w.Code)
+	}
+	if w := request(h, "POST", base+"/payments", `{"haber":100}`, "original"); w.Code != 410 {
+		t.Fatal(w.Code)
+	}
+	if w := request(h, "GET", base+"/movements", "", ""); strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Fatal(w.Body.String())
 	}
 }

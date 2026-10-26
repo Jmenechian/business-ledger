@@ -79,7 +79,12 @@ func initialize(ctx context.Context, db *sql.DB) error {
 	if err := tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	if app == applicationID && version == 1 {
+	if app == applicationID && (version == 1 || version == 2) {
+		if version == 1 {
+			if _, err := tx.ExecContext(ctx, correctionsMigration); err != nil {
+				return err
+			}
+		}
 		return tx.Commit()
 	}
 	if app != 0 || version != 0 {
@@ -95,12 +100,27 @@ func initialize(ctx context.Context, db *sql.DB) error {
 	if _, err := tx.ExecContext(ctx, schema); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, correctionsMigration); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
+const correctionsMigration = `
+ALTER TABLE movements ADD COLUMN revision INTEGER NOT NULL DEFAULT 1 CHECK(revision > 0);
+ALTER TABLE movements ADD COLUMN modified_at TEXT;
+ALTER TABLE movements ADD COLUMN deleted_at TEXT;
+CREATE TRIGGER movement_metadata_no_update BEFORE UPDATE OF created_at, request_key, request_hash ON movements
+WHEN NEW.created_at IS NOT OLD.created_at OR NEW.request_key IS NOT OLD.request_key OR NEW.request_hash IS NOT OLD.request_hash
+BEGIN SELECT RAISE(ABORT, 'Los metadatos originales son inmutables'); END;
+CREATE TRIGGER native_no_physical_delete BEFORE DELETE ON movements WHEN OLD.origin='native'
+BEGIN SELECT RAISE(ABORT, 'La clave de reintento debe conservarse'); END;
+PRAGMA user_version=2;
+`
+
 func (s *Store) Close() error { return s.db.Close() }
 
-const clientColumns = `c.id, c.name, COALESCE((SELECT CAST(m.balance AS TEXT) FROM movements m WHERE m.client_id=c.id ORDER BY m.id DESC LIMIT 1), '0'), c.created_at`
+const clientColumns = `c.id, c.name, COALESCE((SELECT CAST(m.balance AS TEXT) FROM movements m WHERE m.client_id=c.id AND m.deleted_at IS NULL ORDER BY m.id DESC LIMIT 1), '0'), c.created_at`
 
 type scanner interface{ Scan(...any) error }
 
@@ -143,11 +163,11 @@ func (s *Store) Client(ctx context.Context, id int64) (ledger.Client, error) {
 	return c, err
 }
 
-const movementColumns = `id, client_id, origin, kind, description, quantity, CAST(unit_price AS TEXT), reference, business_date, created_at, CAST(debit AS TEXT), CAST(credit AS TEXT), CAST(balance AS TEXT)`
+const movementColumns = `id, client_id, origin, kind, description, quantity, CAST(unit_price AS TEXT), reference, business_date, created_at, CAST(debit AS TEXT), CAST(credit AS TEXT), CAST(balance AS TEXT), revision, modified_at`
 
 func scanMovement(row scanner) (ledger.Movement, error) {
 	var m ledger.Movement
-	err := row.Scan(&m.ID, &m.ClientID, &m.Origin, &m.Kind, &m.Description, &m.Quantity, &m.UnitPrice, &m.Reference, &m.BusinessDate, &m.CreatedAt, &m.Debit, &m.Credit, &m.Balance)
+	err := row.Scan(&m.ID, &m.ClientID, &m.Origin, &m.Kind, &m.Description, &m.Quantity, &m.UnitPrice, &m.Reference, &m.BusinessDate, &m.CreatedAt, &m.Debit, &m.Credit, &m.Balance, &m.Revision, &m.ModifiedAt)
 	return m, err
 }
 
@@ -155,7 +175,7 @@ func (s *Store) Movements(ctx context.Context, id int64) ([]ledger.Movement, err
 	if _, err := s.Client(ctx, id); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+movementColumns+` FROM movements WHERE client_id=? ORDER BY id`, id)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+movementColumns+` FROM movements WHERE client_id=? AND deleted_at IS NULL ORDER BY id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -218,10 +238,14 @@ func (s *Store) append(ctx context.Context, clientID int64, key string, m ledger
 		return ledger.Movement{}, false, err
 	}
 	var previousHash string
-	err = tx.QueryRowContext(ctx, `SELECT request_hash FROM movements WHERE client_id=? AND request_key=?`, clientID, key).Scan(&previousHash)
+	var deleted sql.NullString
+	err = tx.QueryRowContext(ctx, `SELECT request_hash, deleted_at FROM movements WHERE client_id=? AND request_key=?`, clientID, key).Scan(&previousHash, &deleted)
 	if err == nil {
 		if previousHash != hash {
 			return ledger.Movement{}, false, ledger.ErrConflict
+		}
+		if deleted.Valid {
+			return ledger.Movement{}, false, ledger.ErrDeleted
 		}
 		existing, err := scanMovement(tx.QueryRowContext(ctx, `SELECT `+movementColumns+` FROM movements WHERE client_id=? AND request_key=?`, clientID, key))
 		if err != nil {
@@ -233,7 +257,7 @@ func (s *Store) append(ctx context.Context, clientID int64, key string, m ledger
 		return ledger.Movement{}, false, err
 	}
 	previous := ledger.Number(0)
-	err = tx.QueryRowContext(ctx, `SELECT CAST(balance AS TEXT) FROM movements WHERE client_id=? ORDER BY id DESC LIMIT 1`, clientID).Scan(&previous)
+	err = tx.QueryRowContext(ctx, `SELECT CAST(balance AS TEXT) FROM movements WHERE client_id=? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1`, clientID).Scan(&previous)
 	if err != nil && err != sql.ErrNoRows {
 		return ledger.Movement{}, false, err
 	}

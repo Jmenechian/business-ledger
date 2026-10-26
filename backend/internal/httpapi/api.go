@@ -17,6 +17,9 @@ import (
 )
 
 type Store interface {
+	EditDelivery(context.Context, int64, int64, int64, ledger.Delivery) (ledger.Movement, error)
+	EditPayment(context.Context, int64, int64, int64, ledger.Payment) (ledger.Movement, error)
+	DeleteMovement(context.Context, int64, int64, int64) error
 	CreateClient(context.Context, string) (ledger.Client, error)
 	Clients(context.Context) ([]ledger.Client, error)
 	Client(context.Context, int64) (ledger.Client, error)
@@ -42,6 +45,9 @@ func New(store Store, logger *slog.Logger) http.Handler {
 	a.mux.HandleFunc("GET /api/clients/{id}/movements", a.movements)
 	a.mux.HandleFunc("POST /api/clients/{id}/deliveries", a.delivery)
 	a.mux.HandleFunc("POST /api/clients/{id}/payments", a.payment)
+	a.mux.HandleFunc("PUT /api/clients/{id}/movements/{movement}/delivery", a.correction)
+	a.mux.HandleFunc("PUT /api/clients/{id}/movements/{movement}/payment", a.correction)
+	a.mux.HandleFunc("DELETE /api/clients/{id}/movements/{movement}", a.correction)
 	return a
 }
 
@@ -67,7 +73,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if pattern == "" {
 		// ServeMux's generated errors are English; return consistent Spanish JSON instead.
 		allowed := make([]string, 0)
-		for _, method := range []string{http.MethodGet, http.MethodPost} {
+		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
 			clone := r.Clone(r.Context())
 			clone.Method = method
 			if _, p := a.mux.Handler(clone); p != "" {
@@ -100,6 +106,10 @@ func (a *API) fail(w http.ResponseWriter, err error) {
 		status, message = http.StatusBadRequest, err.Error()
 	case errors.Is(err, ledger.ErrNotFound):
 		status, message = http.StatusNotFound, ledger.ErrNotFound.Error()
+	case errors.Is(err, ledger.ErrDeleted):
+		status, message = http.StatusGone, err.Error()
+	case errors.Is(err, ledger.ErrImmutable), errors.Is(err, ledger.ErrStale):
+		status, message = http.StatusConflict, err.Error()
 	case errors.Is(err, ledger.ErrConflict):
 		status, message = http.StatusConflict, ledger.ErrConflict.Error()
 	default:
@@ -230,4 +240,53 @@ func movementResponse(w http.ResponseWriter, m ledger.Movement, replay bool) {
 		w.Header().Set("Idempotency-Replayed", "true")
 	}
 	write(w, status, m)
+}
+
+// If-Match carries the quoted revision from the most recent history response.
+func (a *API) correction(w http.ResponseWriter, r *http.Request) {
+	client, err := clientID(r)
+	if err != nil {
+		a.fail(w, err)
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("movement"), 10, 64)
+	if err != nil || id <= 0 {
+		a.fail(w, ledger.Invalid("el ID de movimiento debe ser positivo"))
+		return
+	}
+	match := r.Header.Get("If-Match")
+	revision, err := strconv.ParseInt(strings.Trim(match, "\""), 10, 64)
+	if err != nil || revision <= 0 || match != "\""+strconv.FormatInt(revision, 10)+"\"" {
+		write(w, 428, map[string]string{"error": "se requiere If-Match con la revisión entre comillas"})
+		return
+	}
+	if r.Method == http.MethodDelete {
+		if err := a.store.DeleteMovement(r.Context(), client, id, revision); err != nil {
+			a.fail(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	var result ledger.Movement
+	if strings.HasSuffix(r.URL.Path, "/delivery") {
+		var input ledger.Delivery
+		if err := decode(w, r, &input); err != nil {
+			a.fail(w, err)
+			return
+		}
+		result, err = a.store.EditDelivery(r.Context(), client, id, revision, input)
+	} else {
+		var input ledger.Payment
+		if err := decode(w, r, &input); err != nil {
+			a.fail(w, err)
+			return
+		}
+		result, err = a.store.EditPayment(r.Context(), client, id, revision, input)
+	}
+	if err != nil {
+		a.fail(w, err)
+		return
+	}
+	write(w, 200, result)
 }

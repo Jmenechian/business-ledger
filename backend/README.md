@@ -1,6 +1,6 @@
 # Backend API
 
-This milestone implements a local ledger API. It does not include authentication, a graphical interface, editing/deleting entries, an importer, sessions, fuzzy matching, PDFs, or Drive integration yet.
+This milestone implements a local ledger API. It does not include authentication, a graphical interface, an importer, sessions, fuzzy matching, PDFs, or Drive integration yet.
 
 ## Start
 
@@ -61,3 +61,11 @@ Validation errors return `400`, nonexistent clients return `404`, and unexpected
 The schema distinguishes imported history from new entries. Imported rows cannot be updated or deleted, and historical amounts and stored balances are returned without rounding or recalculation. No HTTP import endpoint exists in this milestone. Importing an existing database is a separate operation; startup refuses an unrelated existing schema.
 
 New balances continue from the last stored balance in insertion order. If a historical balance has a fractional value, only the newly appended balance is rounded; the historical value remains unchanged. Backdated business dates do not reposition rows.
+
+## Correct native movements
+
+Use `PUT /api/clients/{id}/movements/{movement}/delivery` or `/payment` with a complete replacement payload of the original kind. Use `DELETE /api/clients/{id}/movements/{movement}` to remove a native movement from the visible ledger. All three routes require `If-Match: "<revision>"` using the revision in the latest history response. Missing/invalid preconditions return 428; stale revisions and imported corrections return 409. Refresh history after every correction, including affected later revisions.
+
+Corrections preserve insertion order, original creation timestamps, and original retry fingerprints. `modified_at` records explicit edits/deletions. Balances and revisions of subsequent native rows are updated in the same transaction; any overflow rolls back the entire correction. Imported values are never recalculated. A failed correction or uncertain response can be resolved by refreshing history; a stale correction cannot overwrite a newer change.
+
+Deleted native rows remain internal tombstones. Retrying their original creation request returns 410; different data with that key returns 409. A retry after an edit returns the current movement without undoing the edit. A new intentional entry requires a new key. Tombstones also preserve the import boundary after the last visible native row is deleted. Schema version 1 upgrades transactionally to version 2 on open; migration tests use synthetic files only.
