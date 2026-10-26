@@ -24,7 +24,13 @@ class HTTPSBoundary:
                 message["headers"] += [
                     (b"cache-control", b"no-store"),
                     (b"x-content-type-options", b"nosniff"),
-                    (b"content-security-policy", b"default-src 'none'; frame-ancestors 'none'"),
+                    (
+                        b"content-security-policy",
+                        b"default-src 'none'; script-src 'self'; style-src 'self'; "
+                        b"connect-src 'self'; img-src 'self' data:; font-src 'self'; "
+                        b"frame-ancestors 'none'; base-uri 'none'; "
+                        b"form-action 'self'; object-src 'none'",
+                    ),
                 ]
             await send(message)
 

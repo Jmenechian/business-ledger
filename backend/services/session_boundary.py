@@ -17,6 +17,10 @@ class SessionBoundary:
             ("GET", "/api/health"),
             ("POST", "/api/auth/login"),
         }
+        public = public or (
+            scope["method"] in {"GET", "HEAD"}
+            and (scope["path"] == "/" or scope["path"].startswith("/assets/"))
+        )
         token = Request(scope).cookies.get(COOKIE_NAME, "")
         if not public and not self.auth.authenticate(token):
             await JSONResponse({"error": "inicie sesión para continuar"}, 401)(scope, receive, send)
