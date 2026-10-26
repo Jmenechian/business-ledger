@@ -2,7 +2,7 @@
 
 A customer account ledger for tracking deliveries, payments, and running balances.
 
-The Python/FastAPI backend uses SQLite and provides client accounts, delivery and payment entry, revision-checked corrections, whole-number calculations, durable retry protection, password-protected HTTPS access, and a Spanish PC/mobile interface. Work sessions group confirmed activity into locally retained summaries and audit records. Imported history stays immutable. Planned features include customer-specific price suggestions, PDF statements, and Google Drive snapshots for a read-only viewer.
+The Python/FastAPI backend uses SQLite and provides client accounts, delivery and payment entry, revision-checked corrections, whole-number calculations, durable retry protection, password-protected HTTPS access, and a Spanish PC/mobile interface. Work sessions group confirmed activity into locally retained summaries and audit records. Customer-specific price references and PDF statements from a selected row support daily work. Imported history stays immutable. Google Drive snapshots and an independent read-only viewer are planned.
 
 Requires Python 3.11 or later with SQLite 3.37 or later. From the repository root:
 

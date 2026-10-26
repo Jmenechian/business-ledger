@@ -40,6 +40,8 @@ The server requires direct HTTPS, an explicit origin, and a configured password.
 | GET | /api/clients | Clients and balances |
 | GET | /api/clients/{id} | Client and current balance |
 | GET | /api/clients/{id}/movements | Visible history in accounting order |
+| GET | /api/clients/{id}/price-suggestions?q=... | Customer-only product and price references |
+| GET | /api/clients/{id}/reports/statement.pdf?from_movement_id=... | Download statement from selected row to end |
 | POST | /api/clients/{id}/deliveries | Record delivery |
 | POST | /api/clients/{id}/payments | Record payment |
 | PUT | /api/clients/{id}/movements/{movement}/delivery | Replace native delivery |
@@ -198,3 +200,17 @@ Every native create/edit/delete and its journal event commit in the same immedia
 Summaries include activity counts, deliveries, payments, edits, deletions, per-customer details, debit/credit changes and their net. Aggregate money is returned as decimal integer strings so totals remain exact beyond JavaScript's safe integer range. Corrections contribute their difference; deletion removes the deleted amount from the group's net. The net describes this set of actions, not the full balance of all accounts. Closed summaries remain unchanged when later work corrects an earlier entry. Automatic rollback and cloud publication are separate features.
 
 The backend serves the compiled frontend from frontend/dist on the same HTTPS origin. Build it first as described in [frontend setup](../frontend/README.md). An absent build returns an explicit 503 at / while the API remains available. API authentication is enforced independently of the interface.
+
+## Price references
+
+Suggestions are authenticated and scoped to the selected customer, with no fallback to other accounts. Queries are at most 500 characters; fewer than three normalized nonspace characters produce an empty list. Up to five products expose three references each. Normalization ignores accents, case and punctuation; matching compares original and sorted token order, with a prefix boost. The initial similarity threshold is 0.65, evaluated with synthetic typos, reordered words and distinct product numbers. Numeric tokens in a query must match the candidate's numeric tokens exactly.
+
+Products sort by similarity, reliable creation recency and a stable normalized name. References sort by reliable creation time, then accounting order; missing historical timestamps remain unknown. Existing historical prices remain preserved. Suggested new-entry prices use exact whole-number rounding; a missing price can be derived from positive debit/quantity and is explicitly identified. Deleted rows and unusable prices are excluded. Selecting a price never writes a movement.
+
+## PDF statements
+
+Authenticated statement downloads accept a movement belonging to the selected customer and include that visible row through the end of accounting order. One explicit read transaction captures the report before rendering. Customer row numbers, the preceding stored balance (zero for the first row) and the last stored balance are displayed without recomputing historical discrepancies. Deleted rows are excluded; another customer's or a missing starting row returns 404.
+
+The compact A4 portrait layout uses eight accounting columns, a green customer heading, blue payment rows, repeating table headers, wrapped descriptions and a final balance. Missing historical unit prices can be shown as calculated, with a footnote. Historical decimals remain visible. Spanish dates use the report timezone, initially America/Buenos_Aires; missing/invalid historical dates are never fabricated. Common Spanish text uses Helvetica; embedded fallback fonts cover additional glyphs, with otherwise unsupported characters explicitly represented as Unicode codes rather than missing-glyph boxes.
+
+The response is an attachment with a safe filename and no-store caching. Downloading, opening or printing never marks movements or changes work sessions. The main server is required for this writer-interface export; independent viewer PDF generation is a later milestone. Development tests extract text and exercise long multi-page reports; rendered synthetic samples are reviewed locally and remain outside Git.
