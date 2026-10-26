@@ -7,7 +7,7 @@ Python 3.11+, FastAPI, Pydantic and SQLite 3.37+. Run commands from the reposito
 ```text
 backend/
   main.py                  Application factory, lifespan and error handling
-  server.py                Loopback server entry point
+  server.py                HTTPS server entry point
   router/                  Small routers and HTTP dependencies
   controllers/             Use cases and transaction boundaries
   models/                  Typed request/response models
@@ -22,19 +22,20 @@ Pydantic models describe API contracts. Parameterized SQLite repositories preser
 
 ```sh
 python -m pip install -r backend/requirements-dev.txt
-python -m backend.server --db data/ledger.db --port 8080
 python -m pytest -q
 python -m ruff check backend
 python -m ruff format --check backend
 ```
 
-This milestone serves only 127.0.0.1, with local Host and same-origin checks, no open CORS, no API documentation routes and no access logging. LAN/password access is a separate milestone. All API validation/errors are Spanish. Unexpected failures return a generic error without database details or request data.
+The server requires direct HTTPS, an explicit origin, and a configured password. It defaults to the loopback interface and requires an explicit private IP for LAN access. There is no open CORS, API documentation route, plaintext listener, proxy trust or access logging. All API validation/errors are Spanish. Unexpected failures return a generic error without database details or request data.
 
 ## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | /api/health | Service status |
+| GET | /api/health | Public service status over HTTPS |
+| POST | /api/auth/login | Password login and session rotation |
+| POST | /api/auth/logout | Revoke session and expire cookie |
 | POST | /api/clients | Create client |
 | GET | /api/clients | Clients and balances |
 | GET | /api/clients/{id} | Client and current balance |
@@ -45,7 +46,7 @@ This milestone serves only 127.0.0.1, with local Host and same-origin checks, no
 | PUT | /api/clients/{id}/movements/{movement}/payment | Replace native payment |
 | DELETE | /api/clients/{id}/movements/{movement} | Delete native movement |
 
-POST and PUT require Content-Type: application/json. Bodies are limited to 16 KiB; unknown fields, numeric strings and non-finite numbers are rejected. JSON decimal literals are decoded exactly before rounding. Empty lists return []. Errors use {"error":"mensaje en español"}; invalid input returns 400, missing records 404, conflicts 409 and unexpected failures 500.
+Requests with JSON bodies require Content-Type: application/json. Logout has no request body. Bodies are limited to 16 KiB; unknown fields, numeric strings and non-finite numbers are rejected. JSON decimal literals are decoded exactly before rounding. Empty lists return []. Errors use {"error":"mensaje en español"}; invalid input returns 400, missing records 404, conflicts 409 and unexpected failures 500.
 
 Create a client: `{"nombre":"Cuenta de ejemplo"}`.
 
@@ -72,3 +73,43 @@ A deleted creation retry returns 410; different data with its key still returns 
 Imported rows are immutable by SQLite triggers. Inconsistent quantities, unit prices, amounts and stored balances remain unchanged; missing prices/timestamps remain missing. New rows continue from the last visible stored balance. Fractional imported balances are preserved; only the next native balance is rounded. There is no import HTTP endpoint.
 
 Versioned migrations recognize only the ledger application ID and supported schema versions. Fresh databases and schema-v1 upgrades reach v2 atomically. Original Go creation fingerprints remain compatible, including Unicode/HTML escaping; tests use an original Go-generated synthetic fingerprint. Unrelated databases and future versions are rejected. Code support for schema upgrades does not authorize opening an actual business database; deployment/import is a separate explicit task.
+
+
+## Password and HTTPS setup
+
+All paths below are examples relative to the repository root. Create a private directory and restrict it to the server account and necessary administrators before creating deployment credentials:
+
+```sh
+mkdir private
+python -m backend.password --out private/password.json
+```
+
+The command prompts and confirms without echo. It requires an interactive terminal, at least 12 characters and at most 1024 UTF-8 bytes. There are no plaintext command arguments, environment passwords, piped-password input, default passwords or automatic credential creation. Existing files are never overwritten. The private versioned file stores only a standard Argon2id PHC hash. Fixed costs are 64 MiB, three passes, four lanes, a random 16-byte salt and a 32-byte output, using [argon2-cffi](https://argon2-cffi.readthedocs.io/en/stable/api.html). Unrecognized cost parameters are rejected when loading the file.
+
+Provision a server certificate from a trusted local or administrator-managed CA. Its Subject Alternative Names must cover the exact DNS name or IP used by clients. Install the CA public certificate in each intended client's trust store, including Firefox's configuration where needed. Keep the CA signing key separate from the server. Keep the server private key, certificate chain, password file and databases outside Git. Do not bypass certificate warnings or disable client certificate verification.
+
+On Windows, configure NTFS ACLs for the private and ledger directories; Unix-style creation modes do not replace Windows permissions. Restrict access to the server account and necessary administrators, reviewing inherited permissions. The application does not modify ACLs, firewall rules, system trust or network settings.
+
+After providing private certificate and key files:
+
+```sh
+python -m backend.server --db data/ledger.db --bind 127.0.0.1 --port 8443 --origin https://localhost:8443 --tls-cert private/server.pem --tls-key private/server.key --password-file private/password.json
+```
+
+For LAN use, bind one stable RFC1918/ULA private IP and configure the origin to its certificate-covered name or IP, including the same port. For example, `--bind 192.168.50.10 --origin https://ledger.example.test:8443` requires configuring that synthetic example name to resolve to the chosen private address. Wildcard/public bind addresses are rejected. Limit the Windows Firewall inbound rule to the intended executable/port, Private profile and local subnet. Do not configure router port forwarding.
+
+TLS 1.2 or later is required on every interface. Startup checks certificate validity, SAN coverage, key pairing and the private password file before opening the ledger. Clients must validate chain trust themselves. Forwarded headers never establish HTTPS or Host trust; reverse-proxy TLS termination is unsupported. Use one server process: authentication sessions are held in its memory. Uvicorn access logging is disabled and concurrency is bounded. No service is deployed by installing or testing this code.
+
+Validate certificate trust and login from each target device before deployment. The synthetic backend tests do not establish compatibility or performance on the legacy viewer's actual hardware/browser. The future offline read-only viewer remains separate from this writer API.
+
+## Authentication sessions
+
+Only GET /api/health and POST /api/auth/login are public over the configured HTTPS origin. Every ledger read/write requires a valid session. Every mutation, including login and logout, requires Origin to match the configured origin exactly. Browser requests from other origins are rejected. Command-line clients must send the same Origin header, retain cookies and perform normal certificate verification.
+
+Login body: `{"password":"<configured password>"}`. Success sets an opaque __Host-ledger cookie with Secure, HttpOnly, SameSite=Strict, Path=/ and no Domain. Passwords and cookies are never returned as JSON or logged by the authentication code. The server retains only token hashes. A successful login rotates any presented prior session.
+
+Sessions expire after 30 minutes idle or eight hours total. POST /api/auth/logout revokes the current session and expires the cookie. Restarting the server revokes all sessions without altering ledger entries or request keys. Authentication sessions do not implement commercial sessions.
+
+Login hashing is serialized with a global budget of five attempts per minute; exhaustion returns 429 with Retry-After. At most 64 active sessions are retained. Missing/expired sessions return 401. The global budget can temporarily deny legitimate login under repeated attempts; this single-account baseline is intended for a private LAN, not Internet exposure.
+
+To change or recover a password, stop the server, explicitly remove the old private password file, run the password setup command again, and restart. This revokes existing sessions without deleting or changing the ledger. There is no remote password-reset endpoint.

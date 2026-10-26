@@ -2,7 +2,7 @@
 
 A customer account ledger for tracking deliveries, payments, and running balances.
 
-The Python/FastAPI backend uses SQLite and provides client accounts, delivery and payment entry, revision-checked corrections, whole-number calculations, and durable retry protection. Imported history stays immutable. Planned features include a Spanish web interface, customer-specific price suggestions, PDF statements, and Google Drive snapshots for a read-only viewer.
+The Python/FastAPI backend uses SQLite and provides client accounts, delivery and payment entry, revision-checked corrections, whole-number calculations, durable retry protection, and password-protected HTTPS access. Imported history stays immutable. Planned features include a Spanish web interface, customer-specific price suggestions, PDF statements, and Google Drive snapshots for a read-only viewer.
 
 Requires Python 3.11 or later with SQLite 3.37 or later. From the repository root:
 
@@ -14,10 +14,9 @@ Activate the environment (`.venv/Scripts/Activate.ps1` in PowerShell or `source 
 
 ```sh
 python -m pip install -r backend/requirements-dev.txt
-python -m backend.server
 python -m pytest -q
 python -m ruff check backend
 python -m ruff format --check backend
 ```
 
-The development listener is restricted to loopback until the authentication/HTTPS milestone. See [backend setup and API usage](backend/README.md) for architecture, endpoints, and examples.
+Starting the server requires a private password file and a trusted TLS certificate. HTTPS is mandatory on loopback and LAN; no default credentials exist. See [backend setup and API usage](backend/README.md) for configuration, architecture, endpoints, and examples.
