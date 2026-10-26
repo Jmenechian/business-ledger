@@ -58,6 +58,10 @@ test("logs in, writes through HTTPS and revokes browser access on logout", async
       .filter({ visible: true }),
   ).toBeVisible();
   await page.reload();
+  if (info.project.name === "mobile")
+    await page.getByRole("button", { name: "Cambiar cliente" }).click();
+  await page.getByRole("button", { name: new RegExp(name) }).click();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   await expect(page.getByText("1 acción", { exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: "Terminar transferencia", exact: true })
@@ -97,6 +101,7 @@ test("logs in, writes through HTTPS and revokes browser access on logout", async
   await page.getByRole("button", { name: "Descargar PDF desde aquí" }).click();
   const file = await downloaded;
   expect(await file.failure()).toBeNull();
+  expect(file.suggestedFilename()).toBe(`Resumen ${name}.pdf`);
   const content = await readFile((await file.path())!);
   expect(content.subarray(0, 5).toString()).toBe("%PDF-");
   expect(await (await page.request.get("/api/work-sessions")).json()).toEqual(

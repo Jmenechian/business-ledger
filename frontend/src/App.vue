@@ -28,7 +28,7 @@ import WorkSessionPanel from "./components/WorkSessionPanel.vue";
 import WorkSessionSummary from "./components/WorkSessionSummary.vue";
 import WorkSessionHistory from "./components/WorkSessionHistory.vue";
 import { ApiError, httpAPI } from "./api/client";
-import { savePDF, statementPDF } from "./api/reports";
+import { savePDF, statementPDF, summaryFilename } from "./api/reports";
 import { demoAPI } from "./demo/api";
 import { useLedger } from "./composables/useLedger";
 import { balanceLabel, dateLabel, money, sumAmounts } from "./utils/format";
@@ -82,14 +82,12 @@ function requestDelete() {
 async function downloadPDF() {
   if (!current.value || !selected.value || pdfBusy.value) return;
   const client = current.value.id;
+  const filename = summaryFilename(current.value.nombre);
   const movement = selected.value.id;
   pdfBusy.value = true;
   pdfError.value = "";
   try {
-    savePDF(
-      await statementPDF(client, movement),
-      `cuenta-${client}-resumen.pdf`,
-    );
+    savePDF(await statementPDF(client, movement), filename);
   } catch (error) {
     pdfError.value = (error as Error).message;
     if (error instanceof ApiError && error.status === 401)
@@ -252,6 +250,7 @@ async function downloadPDF() {
           </div>
         </div>
         <LedgerTable
+          :client-id="clientID"
           :rows="rows"
           :selected="selectedID"
           :loading="loading"

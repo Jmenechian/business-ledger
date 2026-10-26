@@ -1,6 +1,9 @@
 """Authenticated, read-only PDF statements; exporting has no ledger effects."""
 
+import re
+import unicodedata
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Response
 
@@ -9,6 +12,19 @@ from backend.models.report import Statement
 from backend.router.dependencies import ClientID, DatabaseDependency
 
 router = APIRouter(prefix="/clients/{client_id}/reports", tags=["Reportes"])
+INVALID_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f\x7f-\x9f]')
+
+
+def summary_filename(client_name: str) -> str:
+    name = INVALID_FILENAME.sub("_", client_name) or "Cliente"
+    return f"Resumen {name}.pdf"
+
+
+def download_disposition(client_name: str) -> str:
+    filename = summary_filename(client_name)
+    ascii_name = unicodedata.normalize("NFKD", client_name).encode("ascii", "ignore").decode()
+    fallback = summary_filename(ascii_name if ascii_name.strip() else "Cliente")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(filename, safe='')}"
 
 
 def render_pdf(statement: Statement) -> bytes:
@@ -25,13 +41,8 @@ def download_statement(
 ) -> Response:
     statement = get_statement(database, client_id, from_movement_id)
     content = render_pdf(statement)
-    # Numeric identifiers avoid inserting untrusted customer text in headers.
-    filename = (
-        f"cuenta-{statement.client_id}-"
-        f"movimientos-{statement.first_row_number}-{statement.last_row_number}.pdf"
-    )
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": download_disposition(statement.client_name)},
     )

@@ -23,7 +23,9 @@ def test_edit_preserves_imports_order_metadata_and_retry(database):
     history = controller.get_movements(database, account.id)
     input = DeliveryCreate(detalle="Sintético", cant=1, precio_unitario=100)
     first, _ = controller.add_delivery(database, account.id, "a", input)
-    second, _ = controller.add_payment(database, account.id, "b", PaymentCreate(haber=Decimal(10)))
+    second, _ = controller.add_payment(
+        database, account.id, "b", PaymentCreate(fecha="2026-10-26", haber=Decimal(10))
+    )
     replacement = delivery(
         DeliveryCreate(detalle="Cambio sintético", cant=2, precio_unitario=100, fecha="2000-01-01")
     )
@@ -46,12 +48,18 @@ def test_edit_preserves_imports_order_metadata_and_retry(database):
 
 def test_concurrent_edits_reject_stale_revisions(database):
     account = client_controller.create_client(database, ClientCreate(nombre="Sintético"))
-    first, _ = controller.add_payment(database, account.id, "a", PaymentCreate(haber=Decimal(100)))
+    first, _ = controller.add_payment(
+        database, account.id, "a", PaymentCreate(fecha="2026-10-26", haber=Decimal(100))
+    )
 
     def edit(_):
         try:
             controller.edit(
-                database, account.id, first.id, 1, payment(PaymentCreate(haber=Decimal(50)))
+                database,
+                account.id,
+                first.id,
+                1,
+                payment(PaymentCreate(fecha="2026-10-26", haber=Decimal(50))),
             )
             return 200
         except LedgerError as error:
@@ -64,13 +72,17 @@ def test_concurrent_edits_reject_stale_revisions(database):
 def test_edit_http_preconditions_and_kind(client):
     id = client.post("/api/clients", json={"nombre": "Sintético"}).json()["id"]
     first = client.post(
-        f"/api/clients/{id}/payments", json={"haber": 100}, headers={"Idempotency-Key": "a"}
+        f"/api/clients/{id}/payments",
+        json={"fecha": "2026-10-26", "haber": 100},
+        headers={"Idempotency-Key": "a"},
     ).json()
     path = f"/api/clients/{id}/movements/{first['id']}"
     for match in ["", "1", 'W/"1"', '"0"', '"01"', "*"]:
         assert (
             client.put(
-                path + "/payment", json={"haber": 50}, headers={"If-Match": match}
+                path + "/payment",
+                json={"fecha": "2026-10-26", "haber": 50},
+                headers={"If-Match": match},
             ).status_code
             == 428
         )
@@ -82,9 +94,15 @@ def test_edit_http_preconditions_and_kind(client):
         ).status_code
         == 400
     )
-    edited = client.put(path + "/payment", json={"haber": 50}, headers={"If-Match": '"1"'})
+    edited = client.put(
+        path + "/payment", json={"fecha": "2026-10-26", "haber": 50}, headers={"If-Match": '"1"'}
+    )
     assert edited.status_code == 200 and edited.json()["revision"] == 2
     assert (
-        client.put(path + "/payment", json={"haber": 40}, headers={"If-Match": '"1"'}).status_code
+        client.put(
+            path + "/payment",
+            json={"fecha": "2026-10-26", "haber": 40},
+            headers={"If-Match": '"1"'},
+        ).status_code
         == 409
     )

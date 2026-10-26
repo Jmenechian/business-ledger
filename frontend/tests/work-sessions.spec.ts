@@ -22,6 +22,7 @@ test("groups confirmed entries, closes with exact partial totals and reopens its
     .getByRole("button", { name: "Registrar pago", exact: true })
     .click();
   await page.getByLabel("Importe recibido").fill("500");
+  await page.getByLabel(/^Fecha/).fill("2026-10-26");
   await page.getByRole("button", { name: "Guardar pago", exact: true }).click();
   await expect(page.getByText("2 acciones", { exact: true })).toBeVisible();
   await page

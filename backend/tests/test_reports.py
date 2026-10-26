@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from dataclasses import FrozenInstanceError
 from decimal import Decimal
+from urllib.parse import unquote
 
 import pytest
 
@@ -81,10 +82,10 @@ def test_statement_derivation_retains_original_price_and_large_historical_values
 def test_statement_excludes_deleted_rows_and_rejects_other_customer(database):
     account, other = synthetic_account(database), synthetic_account(database)
     deleted, _ = movement_controller.add_payment(
-        database, account.id, "deleted", PaymentCreate(haber=Decimal(5))
+        database, account.id, "deleted", PaymentCreate(haber=Decimal(5), fecha="2026-10-26")
     )
     kept, _ = movement_controller.add_payment(
-        database, account.id, "kept", PaymentCreate(haber=Decimal(8))
+        database, account.id, "kept", PaymentCreate(haber=Decimal(8), fecha="2026-10-26")
     )
     movement_controller.delete(database, account.id, deleted.id, deleted.revision)
     report = report_controller.get_statement(database, account.id, kept.id)
@@ -104,7 +105,7 @@ def test_statement_excludes_deleted_rows_and_rejects_other_customer(database):
 def test_statement_uses_consistent_read_snapshot_without_write_lock(database, monkeypatch):
     account = synthetic_account(database)
     row, _ = movement_controller.add_payment(
-        database, account.id, "first", PaymentCreate(haber=Decimal(10))
+        database, account.id, "first", PaymentCreate(haber=Decimal(10), fecha="2026-10-26")
     )
     original_history = report_controller.movements.get_history
     trace = []
@@ -121,7 +122,10 @@ def test_statement_uses_consistent_read_snapshot_without_write_lock(database, mo
     def read_then_concurrent_write(connection, client_id):
         # WAL writer can commit while the report holds its older read snapshot.
         movement_controller.add_payment(
-            database, account.id, "concurrent", PaymentCreate(haber=Decimal(20))
+            database,
+            account.id,
+            "concurrent",
+            PaymentCreate(haber=Decimal(20), fecha="2026-10-26"),
         )
         return original_history(connection, client_id)
 
@@ -139,7 +143,9 @@ def test_statement_download_is_authenticated_and_has_no_mutations(
     account = client.post("/api/clients", json={"nombre": 'Sintética " / <nombre>'}).json()
     path = f"/api/clients/{account['id']}"
     row = client.post(
-        path + "/payments", json={"haber": 20}, headers={"Idempotency-Key": "synthetic"}
+        path + "/payments",
+        json={"haber": 20, "fecha": "2026-10-26"},
+        headers={"Idempotency-Key": "synthetic"},
     ).json()
     history = client.get(path + "/movements").json()
     sessions = client.get("/api/work-sessions").json()
@@ -155,7 +161,8 @@ def test_statement_download_is_authenticated_and_has_no_mutations(
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.headers["content-disposition"] == (
-        f'attachment; filename="cuenta-{account["id"]}-movimientos-1-1.pdf"'
+        'attachment; filename="Resumen Sintetica _ _ _nombre_.pdf"; '
+        "filename*=UTF-8''Resumen%20Sint%C3%A9tica%20_%20_%20_nombre_.pdf"
     )
     assert response.headers["cache-control"] == "no-store"
     assert response.content.startswith(b"%PDF-") and len(captured) == 1
@@ -167,3 +174,20 @@ def test_statement_download_is_authenticated_and_has_no_mutations(
     client.post("/api/auth/logout")
     assert anonymous_client.get(url).status_code == 401
     assert len(captured) == 1
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("Órbita y Ñandú", "Resumen Órbita y Ñandú.pdf"),
+        ('Cuenta ../Norte\\Sur: A?B*<C>|"D"', "Resumen Cuenta .._Norte_Sur_ A_B__C___D_.pdf"),
+        ("Línea\r\nCabecera\t\x00\x85", "Resumen Línea__Cabecera___.pdf"),
+        ("", "Resumen Cliente.pdf"),
+    ],
+)
+def test_statement_filename_preserves_names_without_path_or_header_injection(name, expected):
+    assert reports.summary_filename(name) == expected
+    disposition = reports.download_disposition(name)
+    disposition.encode("ascii")
+    assert "\r" not in disposition and "\n" not in disposition
+    assert unquote(disposition.split("filename*=UTF-8''", 1)[1]) == expected

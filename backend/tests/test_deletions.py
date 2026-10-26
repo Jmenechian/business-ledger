@@ -16,7 +16,7 @@ from backend.services.movements import payment
 def test_delete_keys_survive_restart_and_last_native_boundary(database):
     account = client_controller.create_client(database, ClientCreate(nombre="Sintético"))
     other = client_controller.create_client(database, ClientCreate(nombre="Otra cuenta sintética"))
-    original = PaymentCreate(haber=Decimal(10))
+    original = PaymentCreate(fecha="2026-10-26", haber=Decimal(10))
     first, _ = controller.add_payment(database, account.id, "a", original)
     with pytest.raises(LedgerError) as error:
         controller.delete(database, other.id, first.id, first.revision)
@@ -26,7 +26,10 @@ def test_delete_keys_survive_restart_and_last_native_boundary(database):
     assert client_controller.get_client(database, account.id).saldo == 0
     reopened = Database(database.path)
     reopened.initialize()
-    for input, status in [(original, 410), (PaymentCreate(haber=Decimal(20)), 409)]:
+    for input, status in [
+        (original, 410),
+        (PaymentCreate(fecha="2026-10-26", haber=Decimal(20)), 409),
+    ]:
         with pytest.raises(LedgerError) as error:
             controller.add_payment(reopened, account.id, "a", input)
         assert error.value.status == status
@@ -45,7 +48,9 @@ def test_delete_keys_survive_restart_and_last_native_boundary(database):
 
 def test_overflow_rolls_back_edit_and_deletion(database):
     account = client_controller.create_client(database, ClientCreate(nombre="Sintético"))
-    first, _ = controller.add_payment(database, account.id, "a", PaymentCreate(haber=Decimal(100)))
+    first, _ = controller.add_payment(
+        database, account.id, "a", PaymentCreate(fecha="2026-10-26", haber=Decimal(100))
+    )
     controller.add_delivery(
         database, account.id, "b", DeliveryCreate(detalle="x", cant=1, precio_unitario=MAX_AMOUNT)
     )
@@ -54,7 +59,13 @@ def test_overflow_rolls_back_edit_and_deletion(database):
     )
     before = controller.get_movements(database, account.id)
     with pytest.raises(LedgerError):
-        controller.edit(database, account.id, first.id, 1, payment(PaymentCreate(haber=Decimal(1))))
+        controller.edit(
+            database,
+            account.id,
+            first.id,
+            1,
+            payment(PaymentCreate(fecha="2026-10-26", haber=Decimal(1))),
+        )
     assert controller.get_movements(database, account.id) == before
     with pytest.raises(LedgerError):
         controller.delete(database, account.id, first.id, 1)
@@ -77,7 +88,11 @@ def test_delete_recalculates_from_imported_fraction_and_http_retry(client):
         json={"detalle": "x", "cant": 1, "precio_unitario": 100},
         headers={"Idempotency-Key": "a"},
     ).json()
-    client.post(path + "/payments", json={"haber": 10}, headers={"Idempotency-Key": "b"})
+    client.post(
+        path + "/payments",
+        json={"fecha": "2026-10-26", "haber": 10},
+        headers={"Idempotency-Key": "b"},
+    )
     assert (
         client.delete(path + f"/movements/{a['id']}", headers={"If-Match": '"1"'}).status_code
         == 204
