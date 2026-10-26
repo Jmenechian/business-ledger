@@ -50,8 +50,8 @@ class Credential:
 
 
 def create_credential(password: str) -> Credential:
-    if len(password) < 12 or len(password.encode("utf-8")) > 1024:
-        raise ValueError("la contraseña debe tener al menos 12 caracteres y hasta 1024 bytes")
+    if len(password) < 4 or len(password.encode("utf-8")) > 1024:
+        raise ValueError("la contraseña debe tener al menos 4 caracteres y hasta 1024 bytes UTF-8")
     return Credential(HASHER.hash(password))
 
 
