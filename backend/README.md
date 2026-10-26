@@ -109,6 +109,12 @@ frontend dependencies, builds the frontend, and runs a single HTTPS backend that
 serves the compiled interface. Python 3.11+ and Node.js 22.12+ must be on PATH.
 The console stays open; Ctrl+C stops the server.
 
+On Windows the server uses a Selector event loop for socket-based HTTP/TLS,
+avoiding Proactor shutdown callback failures after a peer resets a connection.
+It does not use asynchronous subprocesses or pipes. The server's 64-connection
+limit stays below the Windows selector socket limit. Other event-loop errors
+retain their normal reporting; no global exception filter is installed.
+
 The first run creates a private local evaluation directory, restricts inherited
 NTFS permissions to the current user and SYSTEM, and provisions a one-year
 self-signed **leaf** certificate for localhost/127.0.0.1. It is not a CA and cannot

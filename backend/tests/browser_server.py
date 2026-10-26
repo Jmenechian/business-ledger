@@ -61,6 +61,7 @@ def main():
             app,
             host="127.0.0.1",
             port=4176,
+            loop="backend.services.event_loop:create_server_loop",
             ssl_context_factory=lambda config, factory: context,
             proxy_headers=False,
             access_log=False,
