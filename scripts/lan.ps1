@@ -9,18 +9,18 @@ function Test-LedgerPrivateIPv4 {
 
 function Get-LedgerLanAddress {
     param([string]$Address)
-    $profiles = @(Get-NetConnectionProfile -ErrorAction Stop | Where-Object { $_.NetworkCategory -eq 'Private' })
-    $candidates = @(foreach ($profile in $profiles) {
-        Get-NetIPAddress -InterfaceIndex $profile.InterfaceIndex -AddressFamily IPv4 -AddressState Preferred -ErrorAction Stop |
+    $adapters = @(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' })
+    $candidates = @(foreach ($adapter in $adapters) {
+        Get-NetIPAddress -InterfaceIndex $adapter.InterfaceIndex -AddressFamily IPv4 -AddressState Preferred -ErrorAction Stop |
             Where-Object { Test-LedgerPrivateIPv4 $_.IPAddress }
     })
     $candidates = @($candidates | Sort-Object IPAddress -Unique)
     if ($candidates.Count -eq 0) {
-        throw 'No se encontro una IPv4 local en una red Privada. Revisa la conexion y el perfil de red de Windows.'
+        throw 'No se encontro una IPv4 privada activa (10.x, 172.16-31.x o 192.168.x). Revisa que la PC este conectada a la red local.'
     }
     if ($Address) {
         if (-not ($candidates | Where-Object { $_.IPAddress -eq $Address })) {
-            throw 'La direccion elegida no pertenece a una interfaz activa de red Privada.'
+            throw 'La direccion elegida no pertenece a una interfaz activa de la red local.'
         }
         return $Address
     }

@@ -219,7 +219,7 @@ The response is an attachment with a safe filename and no-store caching. Downloa
 
 `iniciar-lan.bat` starts the existing evaluation ledger on a selected private IPv4 interface over HTTP port 8443. It uses the same database and password as `iniciar.bat`, without generating or installing certificates. Only one instance should run; stop the current server before switching modes. The original `iniciar.bat` remains the loopback HTTPS launcher.
 
-The LAN launcher selects active RFC1918 IPv4 addresses belonging to a Windows **Private** network profile. When more than one is available, choose the network shared by the client devices. To select explicitly:
+The LAN launcher selects active RFC1918 IPv4 addresses from network adapters that are up; it does not require Windows to label the network **Private**. When more than one is available, choose the network shared by the client devices. To select explicitly:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/iniciar.ps1 -Lan -DireccionLAN 192.168.50.10
@@ -227,7 +227,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/iniciar.ps1 -Lan
 
 The console prints the exact URL. Open that same URL on the server PC, other PCs or Android browsers on the same local network. Password entry remains required. HTTP transmits credentials, cookies and account data without transport encryption; use this explicit mode only where that tradeoff is accepted. It does not enable Internet access or router port forwarding.
 
-If Windows Firewall blocks inbound access, run `habilitar-lan.bat` as administrator on the server after its Python environment exists. This creates an application-specific rule for the selected local address, TCP 8443, Private profile and local subnet only. The rule targets the actual base Python process image used by the virtual environment. It does not change the network profile, disable the firewall or modify router settings. The script prints the exact removal command. Re-run it if the selected address or Python installation changes. Failure while replacing the application rule can leave LAN access disabled; rerun after correcting the reported issue. Reserving the server address in the router can prevent URL changes, but router configuration is separate.
+If Windows Firewall blocks inbound access, run `habilitar-lan.bat` as administrator on the server after its Python environment exists. This creates an application-specific rule for the selected local address, TCP 8443, Private profile and local subnet only. If Windows labels the selected network **Public**, the rule will not apply until that trusted network is manually changed to Private in Windows settings. The rule targets the actual base Python process image used by the virtual environment. It does not change the network profile, disable the firewall or modify router settings. The script prints the exact removal command. Re-run it if the selected address or Python installation changes. Failure while replacing the application rule can leave LAN access disabled; rerun after correcting the reported issue. Reserving the server address in the router can prevent URL changes, but router configuration is separate.
 
 Without the Windows launcher, opt in explicitly:
 

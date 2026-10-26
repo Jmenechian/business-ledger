@@ -50,19 +50,18 @@ foreach ($address in $unsafe) {
     )
 
 
-def test_lan_selection_rejects_public_profiles_and_missing_requested_address(tmp_path):
+def test_lan_selection_uses_active_interface_without_profile_lookup(tmp_path):
     run_synthetic(
         tmp_path,
         r"""
-function Get-NetConnectionProfile {
-    [pscustomobject]@{InterfaceIndex=1;NetworkCategory='Private'}
-    [pscustomobject]@{InterfaceIndex=2;NetworkCategory='Public'}
+function Get-NetAdapter {
+    [pscustomobject]@{InterfaceIndex=1;Status='Up'}
+    [pscustomobject]@{InterfaceIndex=2;Status='Down'}
 }
 function Get-NetIPAddress {
     param($InterfaceIndex,$AddressFamily,$AddressState)
     if ($InterfaceIndex -ne 1) { throw 'Public interface must not be queried' }
     [pscustomobject]@{IPAddress='192.168.50.10';InterfaceAlias='Synthetic LAN'}
-    [pscustomobject]@{IPAddress='169.254.1.2';InterfaceAlias='Synthetic link local'}
 }
 if ((Get-LedgerLanAddress) -ne '192.168.50.10') { throw 'Wrong automatic address' }
 if ((Get-LedgerLanAddress -Address '192.168.50.10') -ne '192.168.50.10') {
@@ -71,10 +70,6 @@ if ((Get-LedgerLanAddress -Address '192.168.50.10') -ne '192.168.50.10') {
 $rejected=$false
 try { Get-LedgerLanAddress -Address '192.168.50.99' | Out-Null } catch { $rejected=$true }
 if (-not $rejected) { throw 'Unassigned address accepted' }
-function Get-NetConnectionProfile { [pscustomobject]@{InterfaceIndex=2;NetworkCategory='Public'} }
-$rejected=$false
-try { Get-LedgerLanAddress | Out-Null } catch { $rejected=$true }
-if (-not $rejected) { throw 'Public-only network accepted' }
 """,
     )
 
@@ -83,7 +78,7 @@ def test_multiple_lan_interfaces_require_explicit_selection(tmp_path):
     run_synthetic(
         tmp_path,
         r"""
-function Get-NetConnectionProfile { [pscustomobject]@{InterfaceIndex=1;NetworkCategory='Private'} }
+function Get-NetAdapter { [pscustomobject]@{InterfaceIndex=1;Status='Up'} }
 function Get-NetIPAddress {
     [pscustomobject]@{IPAddress='192.168.50.10';InterfaceAlias='Synthetic LAN A'}
     [pscustomobject]@{IPAddress='10.0.0.10';InterfaceAlias='Synthetic LAN B'}

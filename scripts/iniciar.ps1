@@ -68,7 +68,7 @@ try {
     if ($Lan) {
         Write-Host 'Modo HTTP de red local: la conexion no esta cifrada.'
         Write-Host 'Abri esa misma direccion en las PCs y celulares de la misma red.'
-        Write-Host 'Si no conecta, habilita la regla local con habilitar-lan.bat como administrador.'
+        Write-Host 'Si no conecta, habilita la regla con habilitar-lan.bat como administrador; requiere perfil de red Privado en Windows.'
     }
     if (Get-NetTCPConnection -LocalPort 8443 -State Listen -ErrorAction SilentlyContinue) {
         throw 'Otra instancia inicio durante la preparacion. Detenela antes de continuar.'
