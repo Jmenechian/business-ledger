@@ -6,6 +6,12 @@ The Python/FastAPI backend uses SQLite and provides client accounts, delivery an
 
 Requires Python 3.11 or later with SQLite 3.37 or later. From the repository root:
 
+On Windows, `iniciar.bat` installs dependencies, builds the interface, configures
+local HTTPS and a password interactively, then serves both API and interface at
+`https://localhost:8443` and opens the default browser. Node.js 22.12+ is also
+required. This launcher is for an independent local evaluation ledger, not LAN
+deployment. See [Windows local setup](backend/README.md#windows-local-launcher).
+
 ```sh
 python -m venv .venv
 ```
