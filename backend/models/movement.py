@@ -82,3 +82,4 @@ class Movement(BaseModel):
     saldo: int | float = 0
     revision: int = 1
     modified_at: str | None = None
+    work_session_id: int | None = None

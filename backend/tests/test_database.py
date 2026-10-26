@@ -11,7 +11,7 @@ def test_connection_settings_and_identity(database):
             assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
             assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
             assert connection.execute("PRAGMA application_id").fetchone()[0] == APPLICATION_ID
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_unrelated_database_is_not_migrated(tmp_path):

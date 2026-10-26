@@ -26,3 +26,4 @@ def get_revision(if_match: Annotated[str, Header()] = "") -> int:
 
 
 Revision = Annotated[int, Depends(get_revision)]
+WorkSessionHeader = Annotated[int | None, Header(alias="X-Work-Session", gt=0)]
