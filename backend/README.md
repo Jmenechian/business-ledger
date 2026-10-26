@@ -1,63 +1,74 @@
 # Backend API
 
-This milestone implements a local ledger API. It does not include authentication, a graphical interface, editing/deleting entries, an importer, sessions, fuzzy matching, PDFs, or Drive integration yet.
+Python 3.11+, FastAPI, Pydantic and SQLite 3.37+. Run commands from the repository root with an activated virtual environment. No database is opened when importing the application factory. Only an explicit startup or a test lifespan initializes the selected database.
 
-## Start
+## Structure
 
-```sh
-go run ./cmd/server -port 8080 -db data/ledger.db
+```text
+backend/
+  main.py                  Application factory, lifespan and error handling
+  server.py                Loopback server entry point
+  router/                  Small routers and HTTP dependencies
+  controllers/             Use cases and transaction boundaries
+  models/                  Typed request/response models
+  database/                Connections, repositories and SQL migrations
+  services/                Exact calculations and independent domain rules
+  tests/                   Synthetic fixtures and behavioral tests
 ```
 
-The listener is fixed to `127.0.0.1` until authentication is implemented. JSON responses and validation messages use Spanish. Business dates use optional `YYYY-MM-DD` input; Spanish display formatting belongs to the upcoming interface/reporting layer. Entry timestamps are generated automatically in UTC and remain separate from business dates.
+Pydantic models describe API contracts. Parameterized SQLite repositories preserve historical numeric types without ORM coercion. Controllers own write transactions; routers never commit database changes. Each connection enables foreign keys and a busy timeout. Immediate transactions serialize balance reads, retry checks and changes across threads/processes. WAL is enabled only on the identified ledger schema.
+
+## Run and check
+
+```sh
+python -m pip install -r backend/requirements-dev.txt
+python -m backend.server --db data/ledger.db --port 8080
+python -m pytest -q
+python -m ruff check backend
+python -m ruff format --check backend
+```
+
+This milestone serves only 127.0.0.1, with local Host and same-origin checks, no open CORS, no API documentation routes and no access logging. LAN/password access is a separate milestone. All API validation/errors are Spanish. Unexpected failures return a generic error without database details or request data.
 
 ## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/health` | Service status |
-| GET | `/api/clients` | Clients and current balances |
-| POST | `/api/clients` | Create a client |
-| GET | `/api/clients/{id}` | Client and current balance |
-| GET | `/api/clients/{id}/movements` | History in insertion order |
-| POST | `/api/clients/{id}/deliveries` | Record a delivery |
-| POST | `/api/clients/{id}/payments` | Record a payment |
+| GET | /api/health | Service status |
+| POST | /api/clients | Create client |
+| GET | /api/clients | Clients and balances |
+| GET | /api/clients/{id} | Client and current balance |
+| GET | /api/clients/{id}/movements | Visible history in accounting order |
+| POST | /api/clients/{id}/deliveries | Record delivery |
+| POST | /api/clients/{id}/payments | Record payment |
+| PUT | /api/clients/{id}/movements/{movement}/delivery | Replace native delivery |
+| PUT | /api/clients/{id}/movements/{movement}/payment | Replace native payment |
+| DELETE | /api/clients/{id}/movements/{movement} | Delete native movement |
 
-POST requests require `Content-Type: application/json`. Movement requests also require an `Idempotency-Key` header: generate a unique key for each intended operation and reuse it when retrying that operation.
+POST and PUT require Content-Type: application/json. Bodies are limited to 16 KiB; unknown fields, numeric strings and non-finite numbers are rejected. JSON decimal literals are decoded exactly before rounding. Empty lists return []. Errors use {"error":"mensaje en español"}; invalid input returns 400, missing records 404, conflicts 409 and unexpected failures 500.
 
-Create a client:
-
-```json
-{"nombre":"Cliente de ejemplo"}
-```
+Create a client: `{"nombre":"Cuenta de ejemplo"}`.
 
 Record a delivery:
 
 ```json
-{"detalle":"Prenda de ejemplo","cant":3,"precio_unitario":1000,"n_remito":"R-001","fecha":"2026-10-25"}
+{"detalle":"Prenda de ejemplo","cant":3,"precio_unitario":1000.5,"n_remito":"R-001","fecha":"2026-10-25"}
 ```
 
-`detalle`, positive integer `cant`, and positive `precio_unitario` are required. `n_remito` and `fecha` are optional. Unit price is rounded to the nearest whole unit before multiplying by quantity. A total charge cannot replace the unit price. New amounts and balances are bounded to JavaScript's exact integer range, ±9,007,199,254,740,991.
+Detail, positive integer quantity and positive unit price are required. Unit price rounds first to whole currency units, with halves away from zero, then multiplies by quantity. A total charge cannot replace the unit price. New money/balances stay within ±9,007,199,254,740,991. Optional fecha uses YYYY-MM-DD; it never changes accounting order. Automatic added_date is UTC and separate from the commercial date. Presentation formatting remains an interface/reporting concern.
 
-Record a payment:
+Record a payment: `{"haber":2000,"detalle":"Pago de ejemplo"}`. Positive haber is required; detail defaults to Pago. Reference/date are optional. Balance is previous balance + debit - credit: positive debt, negative credit, zero settled.
 
-```json
-{"haber":2000,"detalle":"Pago de ejemplo"}
-```
+## Retries and corrections
 
-`haber` is required and rounds to a positive whole unit; `detalle` defaults to `Pago`. `n_remito` and `fecha` are optional.
+Both creation routes require Idempotency-Key, with 1–128 printable ASCII characters without spaces. The key scope is per client and shared across movement kinds. A new request returns 201; the same normalized data returns the current saved row with 200 and Idempotency-Replayed: true; different data with that key returns 409. Identical intentional entries need distinct keys. Keys and original creation fingerprints survive restart, edits and deletion.
 
-## Retry behavior
+PUT replaces the complete payload without changing movement kind, order, creation timestamp or original retry fingerprint. DELETE hides the movement while retaining an internal tombstone. Both require a quoted revision, for example `If-Match: "1"`, taken from the latest history response. Missing/invalid preconditions return 428; stale revisions and attempts to correct imported rows return 409. Explicit edits/deletions set modified_at. All affected native balances/revisions update in one transaction; overflow or SQL failure rolls back the complete operation. Refresh history after corrections. A repeated correction with an old revision cannot overwrite newer state; after an uncertain response, read history to resolve the outcome.
 
-- A new movement returns `201`.
-- Reusing the same key and normalized movement data returns the existing movement with `200` and `Idempotency-Replayed: true`.
-- Reusing that key with different normalized data returns `409` and makes no change.
-- Keys are scoped to a client and shared across delivery/payment routes. Distinct keys permit identical legitimate entries.
-- The key, request fingerprint, movement, and calculated balance are persisted atomically. Keys survive restarts. Timestamps are not used for deduplication.
+A deleted creation retry returns 410; different data with its key still returns 409. Physical deletion is blocked so old requests cannot recreate deleted movements. Native tombstones also preserve the import boundary when all visible native rows are gone. Retrying an edited creation returns the current row and never undoes the edit.
 
-Validation errors return `400`, nonexistent clients return `404`, and unexpected errors return a generic `500` without database details. Empty lists return `[]`.
+## Historical values and upgrades
 
-## Historical values
+Imported rows are immutable by SQLite triggers. Inconsistent quantities, unit prices, amounts and stored balances remain unchanged; missing prices/timestamps remain missing. New rows continue from the last visible stored balance. Fractional imported balances are preserved; only the next native balance is rounded. There is no import HTTP endpoint.
 
-The schema distinguishes imported history from new entries. Imported rows cannot be updated or deleted, and historical amounts and stored balances are returned without rounding or recalculation. No HTTP import endpoint exists in this milestone. Importing an existing database is a separate operation; startup refuses an unrelated existing schema.
-
-New balances continue from the last stored balance in insertion order. If a historical balance has a fractional value, only the newly appended balance is rounded; the historical value remains unchanged. Backdated business dates do not reposition rows.
+Versioned migrations recognize only the ledger application ID and supported schema versions. Fresh databases and schema-v1 upgrades reach v2 atomically. Original Go creation fingerprints remain compatible, including Unicode/HTML escaping; tests use an original Go-generated synthetic fingerprint. Unrelated databases and future versions are rejected. Code support for schema upgrades does not authorize opening an actual business database; deployment/import is a separate explicit task.
