@@ -4,7 +4,13 @@ from fastapi import APIRouter, Header, Response
 
 from backend.controllers import movement_controller
 from backend.models.movement import DeliveryCreate, Movement, PaymentCreate
-from backend.router.dependencies import ClientID, DatabaseDependency, MovementID, Revision
+from backend.router.dependencies import (
+    ClientID,
+    DatabaseDependency,
+    MovementID,
+    Revision,
+    WorkSessionHeader,
+)
 from backend.router.json_route import ExactJSONRoute
 from backend.services import movements as rules
 
@@ -32,9 +38,11 @@ def add_delivery(
     database: DatabaseDependency,
     response: Response,
     idempotency_key: RetryKey = "",
+    work_session: WorkSessionHeader = None,
 ):
     return movement_response(
-        response, movement_controller.add_delivery(database, client_id, idempotency_key, input)
+        response,
+        movement_controller.add_delivery(database, client_id, idempotency_key, input, work_session),
     )
 
 
@@ -45,9 +53,11 @@ def add_payment(
     database: DatabaseDependency,
     response: Response,
     idempotency_key: RetryKey = "",
+    work_session: WorkSessionHeader = None,
 ):
     return movement_response(
-        response, movement_controller.add_payment(database, client_id, idempotency_key, input)
+        response,
+        movement_controller.add_payment(database, client_id, idempotency_key, input, work_session),
     )
 
 
@@ -58,9 +68,10 @@ def edit_delivery(
     input: DeliveryCreate,
     revision: Revision,
     database: DatabaseDependency,
+    work_session: WorkSessionHeader = None,
 ):
     return movement_controller.edit(
-        database, client_id, movement_id, revision, rules.delivery(input)
+        database, client_id, movement_id, revision, rules.delivery(input), work_session
     )
 
 
@@ -71,15 +82,20 @@ def edit_payment(
     input: PaymentCreate,
     revision: Revision,
     database: DatabaseDependency,
+    work_session: WorkSessionHeader = None,
 ):
     return movement_controller.edit(
-        database, client_id, movement_id, revision, rules.payment(input)
+        database, client_id, movement_id, revision, rules.payment(input), work_session
     )
 
 
 @router.delete("/movements/{movement_id}", status_code=204)
 def delete_movement(
-    client_id: ClientID, movement_id: MovementID, revision: Revision, database: DatabaseDependency
+    client_id: ClientID,
+    movement_id: MovementID,
+    revision: Revision,
+    database: DatabaseDependency,
+    work_session: WorkSessionHeader = None,
 ):
-    movement_controller.delete(database, client_id, movement_id, revision)
+    movement_controller.delete(database, client_id, movement_id, revision, work_session)
     return Response(status_code=204)

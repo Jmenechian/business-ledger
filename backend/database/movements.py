@@ -6,7 +6,8 @@ from backend.services.errors import not_found
 MOVEMENT_COLUMNS = """
 id, client_id, origin, kind AS tipo, description AS detalle, quantity AS cant,
 unit_price AS precio_unitario, reference AS n_remito, business_date AS fecha,
-created_at AS added_date, debit AS debe, credit AS haber, balance AS saldo, revision, modified_at
+created_at AS added_date, debit AS debe, credit AS haber, balance AS saldo, revision, modified_at,
+work_session_id
 """
 
 
@@ -43,12 +44,15 @@ def insert(
     digest: str,
     movement: Movement,
     balance: int,
+    session_id: int,
 ) -> Movement:
     row = connection.execute(
         f"""INSERT INTO movements
         (client_id, origin, kind, description, quantity, unit_price, reference,
-         business_date, created_at, debit, credit, balance, request_key, request_hash)
-        VALUES (?, 'native', ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?, ?, ?, ?)
+         business_date, created_at, debit, credit, balance, request_key, request_hash,
+         work_session_id)
+        VALUES (?, 'native', ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                ?, ?, ?, ?, ?, ?)
         RETURNING {MOVEMENT_COLUMNS}""",
         (
             client_id,
@@ -63,6 +67,7 @@ def insert(
             balance,
             key,
             digest,
+            session_id,
         ),
     ).fetchone()
     return Movement(**dict(row))

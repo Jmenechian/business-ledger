@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from backend.database.connection import Database
+from backend.router.frontend import register_frontend
 from backend.router.router import router
 from backend.services.errors import LedgerError
 from backend.services.https_boundary import HTTPSBoundary
@@ -18,7 +19,13 @@ from backend.services.sessions import AuthService, LoginLimit
 from backend.services.transport import origin_host
 
 
-def create_app(database_path: Path, *, origin: str, credential: Credential) -> FastAPI:
+def create_app(
+    database_path: Path,
+    *,
+    origin: str,
+    credential: Credential,
+    frontend_directory: Path | None = None,
+) -> FastAPI:
     origin_host(origin)
     database = Database(database_path)
 
@@ -64,4 +71,7 @@ def create_app(database_path: Path, *, origin: str, credential: Credential) -> F
         return JSONResponse({"error": "no se pudo completar la operación"}, status_code=500)
 
     app.include_router(router)
+    register_frontend(
+        app, frontend_directory or Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    )
     return app

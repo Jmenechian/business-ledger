@@ -1,0 +1,265 @@
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #596b55;
+  display: block;
+  margin-bottom: 8px;
+}
+input:not([type="checkbox"]) {
+  border: 1px solid #dce4d7;
+  border-radius: 5px;
+  width: 100%;
+  min-height: 41px;
+  background: white;
+  color: #3a5035;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+input::placeholder {
+  color: #adb6a5;
+}
+input:disabled,
+fieldset:disabled input {
+  background: #f8faf5;
+  color: #98a38f;
+}
+.required {
+  color: #8aa17e;
+}
+.optional {
+  font-weight: 400;
+  color: #a0aa96;
+  font-size: 9px;
+  margin-left: 4px;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 24px;
+}
+.field-grid > div {
+  min-width: 0;
+}
+.money-input {
+  display: flex;
+  border: 1px solid #dce4d7;
+  border-radius: 5px;
+  align-items: center;
+  background: #fff;
+}
+.money-input > span {
+  padding-left: 12px;
+  color: #a2b097;
+  font-size: 13px;
+}
+.money-input input {
+  border: 0 !important;
+  min-width: 0;
+}
+.form-dialog {
+  border: 1px solid #dbe6d4;
+  border-radius: 10px;
+  padding: 0;
+  width: min(540px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  background: white;
+  box-shadow: 0 20px 100px #0a291b30;
+  color: #3d5135;
+  overflow: auto;
+}
+.form-dialog::backdrop {
+  background: #142c2266;
+  backdrop-filter: blur(3px);
+}
+.dialog-header {
+  padding: 25px 27px 22px;
+  border-bottom: 1px solid #e6eddf;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+}
+.dialog-header h2 {
+  font-size: 23px;
+  letter-spacing: -0.6px;
+  font-weight: 600;
+}
+.dialog-header .icon-button {
+  margin-top: -5px;
+  margin-right: -8px;
+}
+.form-kicker {
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-weight: 600;
+  color: #8c9c80;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  line-height: 1.8;
+  margin-bottom: 6px;
+}
+.dialog-body {
+  padding: 25px 27px;
+}
+.dialog-footer {
+  padding: 17px 27px;
+  border-top: 1px solid #e6eddf;
+  background: #fafcf7;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+.dialog-footer .button {
+  font-size: 11px;
+}
+.price-adjustments {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: #a4ae9a;
+  font-size: 10px;
+}
+.price-adjustments button {
+  background: #f6f9f0;
+  border: 1px solid #e0e9d7;
+  border-radius: 4px;
+  color: #7f9569;
+  padding: 4px 7px;
+  font-size: 10px;
+}
+.price-adjustments small {
+  margin-left: auto;
+  font-size: 8px;
+}
+.optional-fields {
+  padding-top: 21px;
+  border-top: 1px solid #ecf0e6;
+  margin-top: 23px;
+}
+.form-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  background: #f0f6ea;
+  border: 1px solid #e3ecd9;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 25px;
+  color: #658351;
+  font-size: 11px;
+}
+.form-total small {
+  display: block;
+  margin-top: 5px;
+  color: #a4b296;
+  font-size: 9px;
+}
+.form-total strong {
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.form-error {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #a55248;
+  background: #fff3ed;
+  border: 1px solid #f0dcd0;
+  padding: 10px 12px;
+  border-radius: 5px;
+  margin-top: 15px;
+}
+.field-hint {
+  color: #9ca992;
+  font-size: 11px;
+  margin-top: 12px;
+  line-height: 1.7;
+}
+.delete-description {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 15px;
+}
+.dialog-body > .muted {
+  font-size: 12px;
+  line-height: 1.9;
+}
+.dialog-body > .notice {
+  margin-top: 0;
+  font-size: 11px;
+}
+@media (max-width: 800px) {
+  .form-dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 28px);
+    border-radius: 9px;
+  }
+  .dialog-header {
+    padding: 22px 20px 19px;
+  }
+  .dialog-header h2 {
+    font-size: 22px;
+  }
+  .dialog-body {
+    padding: 23px 20px;
+  }
+  .dialog-footer {
+    padding: 16px 20px;
+  }
+  .dialog-footer .button {
+    min-height: 43px;
+    padding: 10px 14px;
+  }
+  .field-grid {
+    gap: 12px;
+  }
+  .field-grid label {
+    font-size: 10px;
+  }
+  .optional {
+    display: block;
+    margin: 3px 0 0;
+    font-size: 9px;
+  }
+  .optional-fields label {
+    min-height: 26px;
+  }
+  .form-total {
+    padding: 15px 13px;
+  }
+  .form-total strong {
+    font-size: 23px;
+  }
+  input:not([type="checkbox"]) {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .price-adjustments button {
+    min-height: 32px;
+    padding: 6px 9px;
+  }
+  .price-adjustments small {
+    font-size: 7px;
+  }
+  .dialog-footer .primary {
+    flex: 1;
+  }
+  .dialog-header .form-kicker {
+    font-size: 8px;
+  }
+  .dialog-body > .notice {
+    font-size: 10px;
+  }
+}
