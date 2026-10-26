@@ -32,6 +32,7 @@ def main() -> None:
         create_app(arguments.db, origin=arguments.origin, credential=credential),
         host=arguments.bind,
         port=arguments.port,
+        loop="backend.services.event_loop:create_server_loop",
         ssl_context_factory=lambda config, factory: context,
         proxy_headers=False,
         access_log=False,

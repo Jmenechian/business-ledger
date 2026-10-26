@@ -17,10 +17,18 @@ def test_password_verification_and_random_salts(credential, synthetic_password):
     assert "argon2" not in repr(credential)
 
 
-@pytest.mark.parametrize("password", ["", "short", "a" * 1025])
+@pytest.mark.parametrize("password", ["", "abc", "a" * 1025, "á" * 513])
 def test_password_policy(password):
     with pytest.raises(ValueError):
         create_credential(password)
+
+
+def test_four_character_password_roundtrip(tmp_path):
+    credential = create_credential("abcd")
+    path = tmp_path / "synthetic-password.json"
+    write_credential(path, credential)
+    assert read_credential(path).verify("abcd")
+    assert not credential.verify("abce")
 
 
 def test_private_file_roundtrip_and_no_overwrite(tmp_path, credential):

@@ -3,6 +3,8 @@ import ipaddress
 import json
 import socket
 import ssl
+import struct
+import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -146,7 +148,9 @@ def test_https_boundary_rejects_plaintext_foreign_hosts_and_origins(client):
     )
 
 
-def test_real_https_login_write_and_logout(tls_files, tmp_path, credential, synthetic_password):
+def test_real_https_login_write_and_logout(
+    tls_files, tmp_path, credential, synthetic_password, caplog
+):
     certificate, key = tls_files()
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
@@ -156,6 +160,7 @@ def test_real_https_login_write_and_logout(tls_files, tmp_path, credential, synt
     app = create_app(tmp_path / "synthetic-tls.db", origin=origin, credential=credential)
     config = uvicorn.Config(
         app,
+        loop="backend.services.event_loop:create_server_loop",
         ssl_context_factory=lambda config, factory: context,
         proxy_headers=False,
         access_log=False,
@@ -171,6 +176,17 @@ def test_real_https_login_write_and_logout(tls_files, tmp_path, credential, synt
             time.sleep(0.01)
         assert server.started
         trusted = ssl.create_default_context(cafile=str(certificate))
+        # Browsers and readiness checks can close/reset connections abruptly.
+        # Exercise both incomplete TLS and a reset after a successful handshake.
+        for handshake in (False, True):
+            for _ in range(3):
+                raw = socket.create_connection(("127.0.0.1", port), timeout=5)
+                interrupted = (
+                    trusted.wrap_socket(raw, server_hostname="localhost") if handshake else raw
+                )
+                linger = struct.pack("HH" if sys.platform == "win32" else "ii", 1, 0)
+                interrupted.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, linger)
+                interrupted.close()
         connection = http.client.HTTPSConnection("127.0.0.1", port, context=trusted, timeout=5)
 
         def request(method, path, payload=None, cookie=""):
@@ -207,3 +223,4 @@ def test_real_https_login_write_and_logout(tls_files, tmp_path, credential, synt
         thread.join(timeout=5)
         listener.close()
     assert not thread.is_alive()
+    assert "Exception in callback" not in caplog.text

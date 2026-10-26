@@ -84,7 +84,7 @@ mkdir private
 python -m backend.password --out private/password.json
 ```
 
-The command prompts and confirms without echo. It requires an interactive terminal, at least 12 characters and at most 1024 UTF-8 bytes. There are no plaintext command arguments, environment passwords, piped-password input, default passwords or automatic credential creation. Existing files are never overwritten. The private versioned file stores only a standard Argon2id PHC hash. Fixed costs are 64 MiB, three passes, four lanes, a random 16-byte salt and a 32-byte output, using [argon2-cffi](https://argon2-cffi.readthedocs.io/en/stable/api.html). Unrecognized cost parameters are rejected when loading the file.
+The command prompts and confirms without echo. It requires an interactive terminal, at least 4 characters and at most 1024 UTF-8 bytes. There are no plaintext command arguments, environment passwords, piped-password input, default passwords or automatic credential creation. Existing files are never overwritten. The private versioned file stores only a standard Argon2id PHC hash. Fixed costs are 64 MiB, three passes, four lanes, a random 16-byte salt and a 32-byte output, using [argon2-cffi](https://argon2-cffi.readthedocs.io/en/stable/api.html). Unrecognized cost parameters are rejected when loading the file.
 
 Provision a server certificate from a trusted local or administrator-managed CA. Its Subject Alternative Names must cover the exact DNS name or IP used by clients. Install the CA public certificate in each intended client's trust store, including Firefox's configuration where needed. Keep the CA signing key separate from the server. Keep the server private key, certificate chain, password file and databases outside Git. Do not bypass certificate warnings or disable client certificate verification.
 
@@ -102,7 +102,69 @@ TLS 1.2 or later is required on every interface. Startup checks certificate vali
 
 Validate certificate trust and login from each target device before deployment. The synthetic backend tests do not establish compatibility or performance on the legacy viewer's actual hardware/browser. The future offline read-only viewer remains separate from this writer API.
 
-## Authentication sessions
+## Windows local launcher
+
+Run `iniciar.bat` from the repository root. It installs Python runtime and locked
+frontend dependencies, builds the frontend, and runs a single HTTPS backend that
+serves the compiled interface. Python 3.11+ and Node.js 22.12+ must be on PATH.
+The console stays open; Ctrl+C stops the server.
+
+On Windows the server uses a Selector event loop for socket-based HTTP/TLS,
+avoiding Proactor shutdown callback failures after a peer resets a connection.
+It does not use asynchronous subprocesses or pipes. The server's 64-connection
+limit stays below the Windows selector socket limit. Other event-loop errors
+retain their normal reporting; no global exception filter is installed.
+
+The first run creates a private local evaluation directory, restricts inherited
+NTFS permissions to the current user and SYSTEM, and provisions a one-year
+self-signed **leaf** certificate for localhost/127.0.0.1. It is not a CA and cannot
+issue certificates. The launcher displays its fingerprint and asks before adding
+this specific certificate to the current user's Windows trusted root store. It
+does not modify machine-wide trust, firewall rules or LAN settings. Firefox may
+require importing this public certificate separately. To revoke trust later,
+remove the displayed certificate from the current user's Trusted Root
+Certification Authorities using `certmgr.msc`. Delete/reprovision expired TLS
+files explicitly; existing files are never silently replaced.
+
+You choose the password interactively without echo; there is no default.
+Certificates, keys, password file, evaluation database and source archives stay
+under `private/local-test/`, outside Git. The launcher always uses
+`private/local-test/ledger.db`. If absent it starts an empty evaluation ledger;
+it never searches for or imports another database automatically. Changes persist
+between runs. Authentication sessions are revoked when the server stops.
+
+### Explicit legacy import
+
+Before the first launch, import only an explicitly selected source into a new,
+independent destination. Close the evaluation server before importing. The
+source is opened read-only and SQLite's backup API captures a consistent private
+archive including committed WAL data; a filesystem copy of the main file is not
+used. Never overwrite an existing destination or archive.
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.import_legacy --source C:\private\legacy.db --destination private/local-test/ledger.db --archive private/local-test/legacy-source.db
+```
+
+Create/restrict the private directory before importing sensitive data. Import
+first with synthetic fixtures when adapting a new schema. The supported legacy
+layout has `clients(id,name[,created_at])` and
+`movements(id,client_id,detalle,cant,precio_unitario,n_remito,fecha,debe,haber,saldo,added_date)`.
+Client and movement IDs, order, names, descriptions, references, commercial
+dates and numeric values/types are verified without rounding or recomputing
+balances. All imported movements become immutable history. New movements remain
+editable. Original `added_date` values stay in the source archive because they
+may be bulk-import timestamps rather than actual event times; no historical
+recency is inferred. A missing client creation timestamp is represented by an
+empty value rather than an invented date.
+
+Legacy PDF markers and transaction summaries remain in the complete private
+source archive; they are not interpreted as new work-session activity. Import
+validation is atomic: failures retain the archive but never publish a partial
+ledger. Error output contains no business records. The independent copy does
+not synchronize changes back to its source. A later production cutover requires
+a fresh source snapshot and an explicit plan for any evaluation changes.
+
+## Authentication session behavior
 
 The public API routes are GET /api/health and POST /api/auth/login over the configured HTTPS origin. The compiled interface at / and its /assets/ files are also public; account data remains authenticated. Every ledger read/write requires a valid session. Every mutation, including login and logout, requires Origin to match the configured origin exactly. Browser requests from other origins are rejected. Command-line clients must send the same Origin header, retain cookies and perform normal certificate verification.
 
