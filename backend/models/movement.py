@@ -80,3 +80,5 @@ class Movement(BaseModel):
     debe: int | float = 0
     haber: int | float = 0
     saldo: int | float = 0
+    revision: int = 1
+    modified_at: str | None = None

@@ -5,7 +5,7 @@ from backend.services.errors import not_found
 
 CLIENT_COLUMNS = """
 c.id, c.name AS nombre, c.created_at,
-COALESCE((SELECT balance FROM movements m WHERE m.client_id=c.id
+COALESCE((SELECT balance FROM movements m WHERE m.client_id=c.id AND m.deleted_at IS NULL
 ORDER BY m.id DESC LIMIT 1), 0) AS saldo
 """
 

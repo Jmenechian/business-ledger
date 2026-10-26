@@ -4,8 +4,9 @@ from fastapi import APIRouter, Header, Response
 
 from backend.controllers import movement_controller
 from backend.models.movement import DeliveryCreate, Movement, PaymentCreate
-from backend.router.dependencies import ClientID, DatabaseDependency
+from backend.router.dependencies import ClientID, DatabaseDependency, MovementID, Revision
 from backend.router.json_route import ExactJSONRoute
+from backend.services import movements as rules
 
 router = APIRouter(prefix="/clients/{client_id}", tags=["Movimientos"], route_class=ExactJSONRoute)
 RetryKey = Annotated[str, Header(alias="Idempotency-Key")]
@@ -47,4 +48,30 @@ def add_payment(
 ):
     return movement_response(
         response, movement_controller.add_payment(database, client_id, idempotency_key, input)
+    )
+
+
+@router.put("/movements/{movement_id}/delivery", response_model=Movement)
+def edit_delivery(
+    client_id: ClientID,
+    movement_id: MovementID,
+    input: DeliveryCreate,
+    revision: Revision,
+    database: DatabaseDependency,
+):
+    return movement_controller.edit(
+        database, client_id, movement_id, revision, rules.delivery(input)
+    )
+
+
+@router.put("/movements/{movement_id}/payment", response_model=Movement)
+def edit_payment(
+    client_id: ClientID,
+    movement_id: MovementID,
+    input: PaymentCreate,
+    revision: Revision,
+    database: DatabaseDependency,
+):
+    return movement_controller.edit(
+        database, client_id, movement_id, revision, rules.payment(input)
     )
