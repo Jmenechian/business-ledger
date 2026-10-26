@@ -219,7 +219,7 @@ The response is an attachment with a safe filename and no-store caching. Downloa
 
 `iniciar-lan.bat` starts the existing evaluation ledger on a selected private IPv4 interface over HTTP port 8443. It uses the same database and password as `iniciar.bat`, without generating or installing certificates. Only one instance should run; stop the current server before switching modes. The original `iniciar.bat` remains the loopback HTTPS launcher.
 
-The LAN launcher selects active RFC1918 IPv4 addresses from network adapters that are up; it does not require Windows to label the network **Private**. When more than one is available, choose the network shared by the client devices. To select explicitly:
+The LAN launcher selects active RFC1918 IPv4 addresses from network adapters that are up; it does not require Windows to label the network **Private**. When several addresses are available, it automatically prefers the adapter with the best default route. It asks only if Windows has no clear preferred route. To select explicitly:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/iniciar.ps1 -Lan -DireccionLAN 192.168.50.10

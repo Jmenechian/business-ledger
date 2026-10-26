@@ -25,6 +25,28 @@ function Get-LedgerLanAddress {
         return $Address
     }
     if ($candidates.Count -eq 1) { return $candidates[0].IPAddress }
+
+    # Prefer the adapter Windows already uses for outbound traffic (usually the LAN/Wi-Fi).
+    $routeMetrics = @(foreach ($route in (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue)) {
+        $ipInterface = Get-NetIPInterface -InterfaceIndex $route.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($null -ne $ipInterface) {
+            [pscustomobject]@{
+                InterfaceIndex = [int]$route.InterfaceIndex
+                Metric = [int]$route.RouteMetric + [int]$ipInterface.InterfaceMetric
+            }
+        }
+    })
+    if ($routeMetrics.Count -gt 0) {
+        $bestMetric = ($routeMetrics | Measure-Object -Property Metric -Minimum).Minimum
+        $bestInterfaces = @($routeMetrics | Where-Object { $_.Metric -eq $bestMetric } |
+            Select-Object -ExpandProperty InterfaceIndex -Unique)
+        if ($bestInterfaces.Count -eq 1) {
+            $preferred = @($candidates | Where-Object { $_.InterfaceIndex -eq $bestInterfaces[0] })
+            if ($preferred.Count -eq 1) { return $preferred[0].IPAddress }
+        }
+    }
+
     Write-Host 'Elegi la direccion de la red compartida con las otras PCs y celulares:'
     for ($index = 0; $index -lt $candidates.Count; $index++) {
         Write-Host ("{0}. {1} ({2})" -f ($index + 1), $candidates[$index].IPAddress, $candidates[$index].InterfaceAlias)

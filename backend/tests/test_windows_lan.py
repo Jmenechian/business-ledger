@@ -80,14 +80,45 @@ def test_multiple_lan_interfaces_require_explicit_selection(tmp_path):
         r"""
 function Get-NetAdapter { [pscustomobject]@{InterfaceIndex=1;Status='Up'} }
 function Get-NetIPAddress {
-    [pscustomobject]@{IPAddress='192.168.50.10';InterfaceAlias='Synthetic LAN A'}
-    [pscustomobject]@{IPAddress='10.0.0.10';InterfaceAlias='Synthetic LAN B'}
+    [pscustomobject]@{IPAddress='192.168.50.10';InterfaceAlias='Synthetic LAN A';InterfaceIndex=1}
+    [pscustomobject]@{IPAddress='10.0.0.10';InterfaceAlias='Synthetic LAN B';InterfaceIndex=1}
 }
+function Get-NetRoute { @() }
 function Read-Host { return '2' }
 if ((Get-LedgerLanAddress) -ne '192.168.50.10') { throw 'Selection not applied' }
 function Read-Host { return '99' }
 $rejected=$false
 try { Get-LedgerLanAddress | Out-Null } catch { $rejected=$true }
 if (-not $rejected) { throw 'Invalid selection accepted' }
+""",
+    )
+
+
+def test_lan_address_prefers_adapter_with_best_default_route(tmp_path):
+    run_synthetic(
+        tmp_path,
+        r"""
+function Get-NetAdapter {
+    [pscustomobject]@{InterfaceIndex=1;Status='Up'}
+    [pscustomobject]@{InterfaceIndex=2;Status='Up'}
+}
+function Get-NetIPAddress {
+    param($InterfaceIndex,$AddressFamily,$AddressState)
+    if ($InterfaceIndex -eq 1) {
+        [pscustomobject]@{IPAddress='192.168.0.11';InterfaceAlias='Ethernet';InterfaceIndex=1}
+    } else {
+        [pscustomobject]@{IPAddress='192.168.56.1';InterfaceAlias='Ethernet 3';InterfaceIndex=2}
+    }
+}
+function Get-NetRoute {
+    param($DestinationPrefix)
+    [pscustomobject]@{InterfaceIndex=1;RouteMetric=25}
+}
+function Get-NetIPInterface {
+    param($InterfaceIndex,$AddressFamily)
+    [pscustomobject]@{InterfaceMetric=10}
+}
+function Read-Host { throw 'A single best default route should be automatic' }
+if ((Get-LedgerLanAddress) -ne '192.168.0.11') { throw 'Default-route adapter not selected' }
 """,
     )
