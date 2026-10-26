@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 // Only the ephemeral synthetic test server has this exception. Application
 // clients use normal certificate verification in actual operation.
@@ -72,6 +73,38 @@ test("logs in, writes through HTTPS and revokes browser access on logout", async
   await page
     .getByRole("button", { name: "Volver a la cuenta", exact: true })
     .click();
+  // Reports remain available after closing the work group, without reopening it.
+  await page
+    .getByRole("button", {
+      name: /Seleccionar movimiento 1: Entrega sintética HTTPS/,
+    })
+    .filter({ visible: true })
+    .click();
+  const historyBefore = await (
+    await page.request.get("/api/work-sessions")
+  ).json();
+  for (const button of await page
+    .getByRole("region", { name: "Movimiento seleccionado" })
+    .getByRole("button")
+    .all()) {
+    const box = await button.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  }
+  await page.screenshot({ path: `../tmp/ui/pdf-${info.project.name}.png` });
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Descargar PDF desde aquí" }).click();
+  const file = await downloaded;
+  expect(await file.failure()).toBeNull();
+  const content = await readFile((await file.path())!);
+  expect(content.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(await (await page.request.get("/api/work-sessions")).json()).toEqual(
+    historyBefore,
+  );
+  expect(
+    await (await page.request.get("/api/work-sessions/active")).json(),
+  ).toBeNull();
   await page
     .getByRole("button", { name: "Cerrar sesión", exact: true })
     .click();

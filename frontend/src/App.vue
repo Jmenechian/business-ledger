@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   BookOpen,
   ChevronDown,
@@ -16,6 +16,7 @@ import {
   Info,
   Check,
   ChevronRight,
+  Download,
 } from "@lucide/vue";
 import ClientSidebar from "./components/ClientSidebar.vue";
 import LedgerTable from "./components/LedgerTable.vue";
@@ -26,7 +27,8 @@ import FormDialog from "./components/FormDialog.vue";
 import WorkSessionPanel from "./components/WorkSessionPanel.vue";
 import WorkSessionSummary from "./components/WorkSessionSummary.vue";
 import WorkSessionHistory from "./components/WorkSessionHistory.vue";
-import { httpAPI } from "./api/client";
+import { ApiError, httpAPI } from "./api/client";
+import { savePDF, statementPDF } from "./api/reports";
 import { demoAPI } from "./demo/api";
 import { useLedger } from "./composables/useLedger";
 import { balanceLabel, dateLabel, money, sumAmounts } from "./utils/format";
@@ -34,6 +36,8 @@ import { balanceLabel, dateLabel, money, sumAmounts } from "./utils/format";
 const demo = new URLSearchParams(window.location.search).get("demo") === "1";
 const api = demo ? demoAPI() : httpAPI();
 const ledger = useLedger(api);
+const pdfBusy = ref(false);
+const pdfError = ref("");
 const {
   authenticated,
   loading,
@@ -74,6 +78,25 @@ function newClient() {
 function requestDelete() {
   formError.value = "";
   deleting.value = selected.value ?? null;
+}
+async function downloadPDF() {
+  if (!current.value || !selected.value || pdfBusy.value) return;
+  const client = current.value.id;
+  const movement = selected.value.id;
+  pdfBusy.value = true;
+  pdfError.value = "";
+  try {
+    savePDF(
+      await statementPDF(client, movement),
+      `cuenta-${client}-resumen.pdf`,
+    );
+  } catch (error) {
+    pdfError.value = (error as Error).message;
+    if (error instanceof ApiError && error.status === 401)
+      await ledger.refresh();
+  } finally {
+    pdfBusy.value = false;
+  }
 }
 </script>
 
@@ -257,6 +280,19 @@ function requestDelete() {
             >
           </div>
           <div class="selection-actions">
+            <button
+              class="button compact secondary pdf-download"
+              :disabled="disabled || pdfBusy || demo"
+              :title="
+                demo
+                  ? 'La descarga se prueba con el servidor HTTPS de evaluación.'
+                  : 'Desde esta fila hasta el final del historial'
+              "
+              @click="downloadPDF"
+            >
+              <Download :size="15" />
+              {{ pdfBusy ? "Generando PDF…" : "Descargar PDF desde aquí" }}
+            </button>
             <template v-if="selected.origin === 'native'"
               ><button
                 class="button compact secondary"
@@ -287,6 +323,9 @@ function requestDelete() {
             </button>
           </div>
         </section>
+        <p v-if="pdfError" class="notice error-notice" role="alert">
+          {{ pdfError }}
+        </p>
         <p class="workspace-note">
           <Info :size="14" /> Los movimientos se guardan al confirmarlos. Las
           fechas no cambian el orden del libro.
