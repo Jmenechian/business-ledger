@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   adjustPrice,
   dateLabel,
@@ -7,9 +7,30 @@ import {
   unitPrice,
   money,
   sumAmounts,
+  newRequestKey,
 } from "./format";
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("ledger presentation and validation", () => {
+  it("creates UUIDv4 retry keys on HTTP where randomUUID is unavailable", () => {
+    let sequence = 0;
+    const getRandomValues = vi.fn((bytes: Uint8Array) => {
+      bytes.fill(255);
+      bytes[0] = sequence++;
+      return bytes;
+    });
+    vi.stubGlobal("crypto", { getRandomValues });
+    const first = newRequestKey();
+    const second = newRequestKey();
+    expect(first).toBe("00ffffff-ffff-4fff-bfff-ffffffffffff");
+    expect(second).toBe("01ffffff-ffff-4fff-bfff-ffffffffffff");
+    expect(getRandomValues).toHaveBeenCalledTimes(2);
+  });
+  it("fails explicitly when secure random bytes are unavailable", () => {
+    vi.stubGlobal("crypto", undefined);
+    expect(() => newRequestKey()).toThrow("clave segura");
+  });
   it("keeps large summaries exact and preserves fractional historical values", () => {
     expect(sumAmounts([9007199254740991, 9007199254740991])).toBe(
       "18014398509481982",

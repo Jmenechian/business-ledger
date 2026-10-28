@@ -7,7 +7,7 @@ Python 3.11+, FastAPI, Pydantic and SQLite 3.37+. Run commands from the reposito
 ```text
 backend/
   main.py                  Application factory, lifespan and error handling
-  server.py                HTTPS server entry point
+  server.py                HTTP/HTTPS server entry point
   router/                  Small routers and HTTP dependencies
   controllers/             Use cases and transaction boundaries
   models/                  Typed request/response models
@@ -27,13 +27,13 @@ python -m ruff check backend
 python -m ruff format --check backend
 ```
 
-The server requires direct HTTPS, an explicit origin, and a configured password. It defaults to the loopback interface and requires an explicit private IP for LAN access. There is no open CORS, API documentation route, plaintext listener, proxy trust or access logging. All API validation/errors are Spanish. Unexpected failures return a generic error without database details or request data.
+The server requires an explicit origin and configured password. HTTPS is the default; plaintext HTTP is available only with explicit opt-in on private/loopback addresses. LAN access requires an explicit private IP. There is no open CORS, API documentation route or proxy trust. All API validation/errors are Spanish. Unexpected failures return a generic error without database details or request data.
 
 ## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | /api/health | Public service status over HTTPS |
+| GET | /api/health | Public service status over the configured transport |
 | POST | /api/auth/login | Password login and session rotation |
 | POST | /api/auth/logout | Revoke session and expire cookie |
 | POST | /api/clients | Create client |
@@ -100,7 +100,7 @@ python -m backend.server --db data/ledger.db --bind 127.0.0.1 --port 8443 --orig
 
 For LAN use, bind one stable RFC1918/ULA private IP and configure the origin to its certificate-covered name or IP, including the same port. For example, `--bind 192.168.50.10 --origin https://ledger.example.test:8443` requires configuring that synthetic example name to resolve to the chosen private address. Wildcard/public bind addresses are rejected. Limit the Windows Firewall inbound rule to the intended executable/port, Private profile and local subnet. Do not configure router port forwarding.
 
-TLS 1.2 or later is required on every interface. Startup checks certificate validity, SAN coverage, key pairing and the private password file before opening the ledger. Clients must validate chain trust themselves. Forwarded headers never establish HTTPS or Host trust; reverse-proxy TLS termination is unsupported. Use one server process: authentication sessions are held in its memory. Uvicorn access logging is disabled and concurrency is bounded. No service is deployed by installing or testing this code.
+In HTTPS mode, TLS 1.2 or later is required on every interface. Startup checks certificate validity, SAN coverage, key pairing and the private password file before opening the ledger. Clients must validate chain trust themselves. Forwarded headers never establish HTTPS or Host trust; reverse-proxy TLS termination is unsupported. Use one server process: authentication sessions are held in its memory. Uvicorn access logging is disabled and concurrency is bounded. No service is deployed by installing or testing this code.
 
 Validate certificate trust and login from each target device before deployment. The synthetic backend tests do not establish compatibility or performance on the legacy viewer's actual hardware/browser. The future offline read-only viewer remains separate from this writer API.
 
@@ -168,7 +168,7 @@ a fresh source snapshot and an explicit plan for any evaluation changes.
 
 ## Authentication session behavior
 
-The public API routes are GET /api/health and POST /api/auth/login over the configured HTTPS origin. The compiled interface at / and its /assets/ files are also public; account data remains authenticated. Every ledger read/write requires a valid session. Every mutation, including login and logout, requires Origin to match the configured origin exactly. Browser requests from other origins are rejected. Command-line clients must send the same Origin header, retain cookies and perform normal certificate verification.
+The public API routes are GET /api/health and POST /api/auth/login over the configured origin. The compiled interface at / and its /assets/ files are also public; account data remains authenticated. Every ledger read/write requires a valid session. Every mutation, including login and logout, requires Origin to match the configured origin exactly. Browser requests from other origins are rejected. Command-line clients must send the same Origin header and retain cookies; they must perform normal certificate verification in HTTPS mode.
 
 Login body: `{"password":"<configured password>"}`. Success sets an opaque __Host-ledger cookie with Secure, HttpOnly, SameSite=Strict, Path=/ and no Domain. Passwords and cookies are never returned as JSON or logged by the authentication code. The server retains only token hashes. A successful login rotates any presented prior session.
 
@@ -199,7 +199,7 @@ Every native create/edit/delete and its journal event commit in the same immedia
 
 Summaries include activity counts, deliveries, payments, edits, deletions, per-customer details, debit/credit changes and their net. Aggregate money is returned as decimal integer strings so totals remain exact beyond JavaScript's safe integer range. Corrections contribute their difference; deletion removes the deleted amount from the group's net. The net describes this set of actions, not the full balance of all accounts. Closed summaries remain unchanged when later work corrects an earlier entry. Automatic rollback and cloud publication are separate features.
 
-The backend serves the compiled frontend from frontend/dist on the same HTTPS origin. Build it first as described in [frontend setup](../frontend/README.md). An absent build returns an explicit 503 at / while the API remains available. API authentication is enforced independently of the interface.
+The backend serves the compiled frontend from frontend/dist on the same configured origin. Build it first as described in [frontend setup](../frontend/README.md). An absent build returns an explicit 503 at / while the API remains available. API authentication is enforced independently of the interface.
 
 ## Price references
 
@@ -214,3 +214,25 @@ Authenticated statement downloads accept a movement belonging to the selected cu
 The compact A4 portrait layout contains only the customer name, issue date, eight accounting columns and final balance. It uses green headings, blue payment rows, repeating table headers and wrapped descriptions. Descriptions have no added row numbers; prices have no markers, and no range, opening-balance line, footnotes or page numbers are printed. Missing historical unit prices can be derived for display without changing stored values. Historical decimals remain visible. Spanish dates use the report timezone, initially America/Buenos_Aires; missing/invalid historical dates are never fabricated. Common Spanish text uses Helvetica; embedded fallback fonts cover additional glyphs, with otherwise unsupported characters explicitly represented as Unicode codes rather than missing-glyph boxes.
 
 The response is an attachment with a safe filename and no-store caching. Downloading, opening or printing never marks movements or changes work sessions. The main server is required for this writer-interface export; independent viewer PDF generation is a later milestone. Development tests extract text and exercise long multi-page reports; rendered synthetic samples are reviewed locally and remain outside Git.
+
+## Windows LAN HTTP mode
+
+`iniciar-lan.bat` starts the existing evaluation ledger on a selected private IPv4 interface over HTTP port 8443. It uses the same database and password as `iniciar.bat`, without generating or installing certificates. Only one instance should run; stop the current server before switching modes. The original `iniciar.bat` remains the loopback HTTPS launcher.
+
+The LAN launcher selects active RFC1918 IPv4 addresses from network adapters that are up; it does not require Windows to label the network **Private**. When several addresses are available, it automatically prefers the adapter with the best default route. It asks only if Windows has no clear preferred route. To select explicitly:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/iniciar.ps1 -Lan -DireccionLAN 192.168.50.10
+```
+
+The console prints the exact URL. Open that same URL on the server PC, other PCs or Android browsers on the same local network. Password entry remains required. HTTP transmits credentials, cookies and account data without transport encryption; use this explicit mode only where that tradeoff is accepted. It does not enable Internet access or router port forwarding.
+
+If Windows Firewall blocks inbound access, run `habilitar-lan.bat` as administrator on the server after its Python environment exists. This creates an application-specific rule for the selected local address, TCP 8443, Private profile and local subnet only. If Windows labels the selected network **Public**, the rule will not apply until that trusted network is manually changed to Private in Windows settings. The rule targets the actual base Python process image used by the virtual environment. It does not change the network profile, disable the firewall or modify router settings. The script prints the exact removal command. Re-run it if the selected address or Python installation changes. Failure while replacing the application rule can leave LAN access disabled; rerun after correcting the reported issue. Reserving the server address in the router can prevent URL changes, but router configuration is separate.
+
+Without the Windows launcher, opt in explicitly:
+
+```sh
+python -m backend.server --db data/ledger.db --bind 192.168.50.10 --port 8443 --origin http://192.168.50.10:8443 --allow-http --password-file private/password.json
+```
+
+HTTP mode rejects public/wildcard bind addresses, public origins and TLS file arguments. HTTPS continues to require its certificate and key. Both modes enforce the configured Host/Origin, password, session expiry and SameSite/HttpOnly cookies. HTTP uses a distinct `ledger-http` cookie without Secure; HTTPS retains `__Host-ledger` with Secure. Restarting revokes all authentication sessions.

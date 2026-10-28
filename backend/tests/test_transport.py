@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 from backend.main import create_app
-from backend.services.transport import Transport
+from backend.services.transport import Transport, origin_host
 
 
 @pytest.fixture
@@ -126,6 +126,72 @@ def test_tls_context_and_fail_closed_configuration(tls_files):
         Transport(
             "127.0.0.1", 8443, "https://localhost:8443", certificate, expired_key
         ).ssl_context()
+
+
+def test_http_transport_requires_opt_in_and_no_ambiguous_tls_configuration(tls_files):
+    origin = "http://192.168.50.10:8443"
+    with pytest.raises(ValueError):
+        Transport("192.168.50.10", 8443, origin).ssl_context()
+    assert Transport("192.168.50.10", 8443, origin, allow_http=True).ssl_context() is None
+    assert (
+        Transport("127.0.0.1", 8443, "http://localhost:8443", allow_http=True).ssl_context() is None
+    )
+    certificate, key = tls_files()
+    for certificate_path, key_path in [(certificate, None), (None, key), (certificate, key)]:
+        with pytest.raises(ValueError, match="HTTP no admite archivos TLS"):
+            Transport(
+                "192.168.50.10", 8443, origin, certificate_path, key_path, allow_http=True
+            ).ssl_context()
+    # Opt-in permits plaintext; it does not silently downgrade a configured HTTPS origin.
+    assert (
+        Transport("127.0.0.1", 8443, "https://localhost:8443", certificate, key, allow_http=True)
+        .ssl_context()
+        .minimum_version
+        == ssl.TLSVersion.TLSv1_2
+    )
+    for certificate_path, key_path in [(None, None), (certificate, None), (None, key)]:
+        with pytest.raises(ValueError, match="HTTPS requiere certificado y clave TLS"):
+            Transport(
+                "127.0.0.1", 8443, "https://localhost:8443", certificate_path, key_path
+            ).ssl_context()
+
+
+@pytest.mark.parametrize(
+    "bind, origin",
+    [
+        ("10.0.0.1", "http://10.0.0.1:8443"),
+        ("172.16.1.2", "http://172.16.1.2:8443"),
+        ("192.168.50.10", "http://192.168.50.10:8443"),
+        ("::1", "http://[::1]:8443"),
+        ("fd00::1", "http://[fd00::1]:8443"),
+    ],
+)
+def test_http_accepts_only_explicit_private_or_loopback_endpoints(bind, origin):
+    assert origin_host(origin, allow_http=True)
+    assert Transport(bind, 8443, origin, allow_http=True).ssl_context() is None
+
+
+@pytest.mark.parametrize(
+    "bind, origin",
+    [
+        ("0.0.0.0", "http://192.168.50.10:8443"),
+        ("::", "http://[fd00::1]:8443"),
+        ("8.8.8.8", "http://8.8.8.8:8443"),
+        ("169.254.1.1", "http://169.254.1.1:8443"),
+        ("localhost", "http://localhost:8443"),
+        ("127.0.0.1", "http://evil.invalid:8443"),
+        ("127.0.0.1", "http://8.8.8.8:8443"),
+        ("127.0.0.1", "http://localhost:8080"),
+        ("127.0.0.1", "http://localhost:8443/"),
+        ("127.0.0.1", "http://user:password@localhost:8443"),
+        ("127.0.0.1", "http://localhost:8443?x=1"),
+        ("127.0.0.1", "http://localhost:8443#fragment"),
+        ("127.0.0.1", "http://localhost"),
+    ],
+)
+def test_http_opt_in_never_allows_public_wildcard_or_malformed_endpoints(bind, origin):
+    with pytest.raises(ValueError):
+        Transport(bind, 8443, origin, allow_http=True).ssl_context()
 
 
 def test_https_boundary_rejects_plaintext_foreign_hosts_and_origins(client):

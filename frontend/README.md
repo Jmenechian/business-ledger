@@ -11,7 +11,7 @@ npm test
 npm run format:check
 ```
 
-The backend serves `dist/index.html` and `dist/assets/` over its configured HTTPS origin. Build first, then start the Python server using the private password/certificate instructions in [backend setup](../backend/README.md). Static files and the login screen are public; ledger and work-session endpoints still require authentication. The CSP allows local compiled scripts/styles and same-origin API requests, with no inline scripts or external CDNs. There is no separate production API hostname, token storage or CORS exception.
+The backend serves `dist/index.html` and `dist/assets/` over its configured origin. HTTPS is the default; private LAN HTTP is an explicit server mode. Build first, then follow [backend setup](../backend/README.md). Static files and the login screen are public; ledger and work-session endpoints still require authentication. The CSP allows local compiled scripts/styles and same-origin API requests, with no inline scripts or external CDNs. There is no separate production API hostname, token storage or CORS exception. HTTP labels identify local access rather than claiming encryption. Request keys use cryptographic randomness even when `crypto.randomUUID` is unavailable on an insecure private-IP origin.
 
 ## Synthetic preview
 

@@ -25,8 +25,9 @@ def create_app(
     origin: str,
     credential: Credential,
     frontend_directory: Path | None = None,
+    allow_http: bool = False,
 ) -> FastAPI:
-    origin_host(origin)
+    origin_host(origin, allow_http=allow_http)
     database = Database(database_path)
 
     @asynccontextmanager
@@ -44,8 +45,10 @@ def create_app(
     )
     app.state.database = database
     app.state.auth = AuthService(credential)
-    app.add_middleware(SessionBoundary, auth=app.state.auth)
-    app.add_middleware(HTTPSBoundary, origin=origin)
+    app.state.secure_cookies = origin.startswith("https:")
+    app.state.cookie_name = "__Host-ledger" if app.state.secure_cookies else "ledger-http"
+    app.add_middleware(SessionBoundary, auth=app.state.auth, cookie_name=app.state.cookie_name)
+    app.add_middleware(HTTPSBoundary, origin=origin, allow_http=allow_http)
 
     @app.exception_handler(LedgerError)
     async def ledger_error(request: Request, error: LedgerError):

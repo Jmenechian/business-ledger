@@ -18,6 +18,11 @@ export default defineConfig({
       ignoreHTTPSErrors: true,
       reuseExistingServer: false,
     },
+    {
+      command: "node tests/start-api.mjs --http",
+      url: "http://127.0.0.1:4177/api/health",
+      reuseExistingServer: false,
+    },
   ],
   projects: [
     {

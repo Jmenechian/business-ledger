@@ -5,9 +5,10 @@ from backend.services.sessions import COOKIE_NAME, AuthService
 
 
 class SessionBoundary:
-    def __init__(self, app, auth: AuthService):
+    def __init__(self, app, auth: AuthService, cookie_name: str = COOKIE_NAME):
         self.app = app
         self.auth = auth
+        self.cookie_name = cookie_name
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -21,7 +22,7 @@ class SessionBoundary:
             scope["method"] in {"GET", "HEAD"}
             and (scope["path"] == "/" or scope["path"].startswith("/assets/"))
         )
-        token = Request(scope).cookies.get(COOKIE_NAME, "")
+        token = Request(scope).cookies.get(self.cookie_name, "")
         if not public and not self.auth.authenticate(token):
             await JSONResponse({"error": "inicie sesión para continuar"}, 401)(scope, receive, send)
             return

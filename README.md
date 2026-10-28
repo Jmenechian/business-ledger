@@ -12,6 +12,10 @@ local HTTPS and a password interactively, then serves both API and interface at
 required. This launcher is for an independent local evaluation ledger, not LAN
 deployment. See [Windows local setup](backend/README.md#windows-local-launcher).
 
+For an explicitly selected private LAN, `iniciar-lan.bat` starts HTTP access for
+PC/mobile browsers without certificate installation. It reuses the same local
+ledger and password. See [LAN setup](backend/README.md#windows-lan-http-mode).
+
 ```sh
 python -m venv .venv
 ```
@@ -25,7 +29,7 @@ python -m ruff check backend
 python -m ruff format --check backend
 ```
 
-Starting the server requires a private password file and a trusted TLS certificate. HTTPS is mandatory on loopback and LAN; no default credentials exist. See [backend setup and API usage](backend/README.md) for configuration, architecture, endpoints, and examples.
+Starting the server requires a private password file. HTTPS is the default and requires a trusted TLS certificate; private HTTP requires explicit opt-in. No default credentials exist. See [backend setup and API usage](backend/README.md) for configuration, architecture, endpoints, and examples.
 
 Build the interface with Node.js 22.12+ before starting the HTTPS server:
 
